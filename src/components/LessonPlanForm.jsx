@@ -12,11 +12,20 @@ const formatDateToBR = (dateStr) => {
   return `${day}/${month}/${year}`;
 };
 
-export const LessonPlanForm = () => {
+export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
   // Estados de Registro Oficial (Cabeçalho da Ficha)
-  const [unidadeEnsino, setUnidadeEnsino] = useState('EMEBTI "JULIETA DEPS TALLON"');
-  const [nomeProfessor, setNomeProfessor] = useState('HENRIQUE');
-  const [turma, setTurma] = useState('1º ANO A - VESPERTINO');
+  const [unidadeEnsino, setUnidadeEnsino] = useState(() => {
+    return profile?.school_1 ? profile.school_1.toUpperCase() : 'EMEBTI "JULIETA DEPS TALLON"';
+  });
+  const [nomeProfessor, setNomeProfessor] = useState(() => {
+    return profile?.full_name ? profile.full_name.toUpperCase() : 'HENRIQUE';
+  });
+  const [turma, setTurma] = useState(() => {
+    if (profile?.turma && profile?.horario_aula) {
+      return `${profile.turma.toUpperCase()} - ${profile.horario_aula.toUpperCase()}`;
+    }
+    return profile?.turma ? profile.turma.toUpperCase() : '1º ANO A - VESPERTINO';
+  });
   
   // Seletores de calendário para planos semanais ou quinzenais
   const [dateStart, setDateStart] = useState(() => {
@@ -32,7 +41,20 @@ export const LessonPlanForm = () => {
 
   // Estados do Formulário de Filtro
   const [subject, setSubject] = useState('Português');
-  const [grade, setGrade] = useState('1º Ano');
+  const [grade, setGrade] = useState(() => {
+    if (profile?.turma) {
+      const match = profile.turma.match(/[1-5](?:º|o)?\s*Ano/i);
+      if (match) {
+        const num = match[0].match(/[1-5]/)[0];
+        return `${num}º Ano`;
+      }
+      const simpleNumMatch = profile.turma.match(/^[1-5]/);
+      if (simpleNumMatch) {
+        return `${simpleNumMatch[0]}º Ano`;
+      }
+    }
+    return '1º Ano';
+  });
   const [trimester, setTrimester] = useState('2º Trimestre');
   const [resource, setResource] = useState('analog');
   const [needsAdaptation, setNeedsAdaptation] = useState(true);
@@ -41,7 +63,7 @@ export const LessonPlanForm = () => {
   const [skillCodesInput, setSkillCodesInput] = useState('');
 
   // Estados de Fluxo da UI
-  const [activeTab, setActiveTab] = useState('generator');
+  const [activeTab, setActiveTab] = useState('home');
   const [loading, setLoading] = useState(false);
   const [loadingStepIndex, setLoadingStepIndex] = useState(0);
   const [generatedPlan, setGeneratedPlan] = useState(null);
@@ -51,31 +73,64 @@ export const LessonPlanForm = () => {
   const [showAccessibilityDicas, setShowAccessibilityDicas] = useState(true);
   const [showGabarito, setShowGabarito] = useState(false);
   const [borderTheme, setBorderTheme] = useState('classic'); // 'classic', 'space', 'nature', 'school'
-  const [savedPlans, setSavedPlans] = useState([]);
-  const [darkMode, setDarkMode] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('eduplan_darkMode');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [errorMsg, setErrorMsg] = useState('');
   const [envWarning, setEnvWarning] = useState(false);
 
-  // === ESTADOS DO CENSO DIGITAL & DIAGNÓSTICO DE IMPACTO ===
-  const [censusAnswers, setCensusAnswers] = useState({ q1: 1, q2: 1, q3: 1, q4: 1, q5: 1 });
-  const [censusSubmitted, setCensusSubmitted] = useState(false);
-  const [censusProfile, setCensusProfile] = useState('');
+  // Controle de Visualização da Sidebar
+  const [showAdvancedMenu, setShowAdvancedMenu] = useState(() => {
+    return localStorage.getItem('eduplan_showAdvancedMenu') === 'true';
+  });
+
+  // === ESTADOS PERSISTIDOS NO LOCALSTORAGE ===
+  const [savedPlans, setSavedPlans] = useState(() => {
+    const saved = localStorage.getItem('eduplan_savedPlans');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [censusAnswers, setCensusAnswers] = useState(() => {
+    const saved = localStorage.getItem('eduplan_censusAnswers');
+    return saved ? JSON.parse(saved) : { q1: 1, q2: 1, q3: 1, q4: 1, q5: 1 };
+  });
+
+  const [censusSubmitted, setCensusSubmitted] = useState(() => {
+    return localStorage.getItem('eduplan_censusSubmitted') === 'true';
+  });
+
+  const [censusProfile, setCensusProfile] = useState(() => {
+    return localStorage.getItem('eduplan_censusProfile') || '';
+  });
 
   // === ESTADOS DO SAAS DE PREFEITURAS & CAPACITAÇÃO ===
   const [prefeituraName] = useState('CACHOEIRO DE ITAPEMIRIM - ES');
-  const [schools, setSchools] = useState([
-    { id: 1, name: 'EMEBTI "JULIETA DEPS TALLON"', adoption: 85, teachers: 14, trained: 12, connected: true },
-    { id: 2, name: 'EMEB "CASTRO ALVES"', adoption: 65, teachers: 18, trained: 11, connected: true },
-    { id: 3, name: 'EMEB "FLORISBELA CORRÊA LIMA"', adoption: 42, teachers: 10, trained: 4, connected: false },
-    { id: 4, name: 'EMEB "PROF. ALBERTO SARTÓRIO"', adoption: 20, teachers: 12, trained: 2, connected: false }
-  ]);
+  const [schools, setSchools] = useState(() => {
+    const saved = localStorage.getItem('eduplan_schools');
+    return saved ? JSON.parse(saved) : [
+      { id: 1, name: 'EMEBTI "JULIETA DEPS TALLON"', adoption: 85, teachers: 14, trained: 12, connected: true },
+      { id: 2, name: 'EMEB "CASTRO ALVES"', adoption: 65, teachers: 18, trained: 11, connected: true },
+      { id: 3, name: 'EMEB "FLORISBELA CORRÊA LIMA"', adoption: 42, teachers: 10, trained: 4, connected: false },
+      { id: 4, name: 'EMEB "PROF. ALBERTO SARTÓRIO"', adoption: 20, teachers: 12, trained: 2, connected: false }
+    ];
+  });
   const [newSchoolName, setNewSchoolName] = useState('');
   const [newSchoolTeachers, setNewSchoolTeachers] = useState(10);
 
   // Quizes da Formação de Professores (1 pergunta de teste por Eixo)
-  const [quizAnswers, setQuizAnswers] = useState({ 0: null, 1: null, 2: null });
-  const [quizSubmitted, setQuizSubmitted] = useState({ 0: false, 1: false, 2: false });
-  const [quizResults, setQuizResults] = useState({ 0: null, 1: null, 2: null });
+  const [quizAnswers, setQuizAnswers] = useState(() => {
+    const saved = localStorage.getItem('eduplan_quizAnswers');
+    return saved ? JSON.parse(saved) : { 0: null, 1: null, 2: null };
+  });
+  const [quizSubmitted, setQuizSubmitted] = useState(() => {
+    const saved = localStorage.getItem('eduplan_quizSubmitted');
+    return saved ? JSON.parse(saved) : { 0: false, 1: false, 2: false };
+  });
+  const [quizResults, setQuizResults] = useState(() => {
+    const saved = localStorage.getItem('eduplan_quizResults');
+    return saved ? JSON.parse(saved) : { 0: null, 1: null, 2: null };
+  });
   const [showCertificate, setShowCertificate] = useState(false);
   
   // Quiz Database
@@ -155,7 +210,45 @@ export const LessonPlanForm = () => {
     } else {
       body.classList.remove('dark-theme');
     }
+    localStorage.setItem('eduplan_darkMode', darkMode);
   }, [darkMode]);
+
+  // Efeitos para persistência no LocalStorage
+  useEffect(() => {
+    localStorage.setItem('eduplan_savedPlans', JSON.stringify(savedPlans));
+  }, [savedPlans]);
+
+  useEffect(() => {
+    localStorage.setItem('eduplan_schools', JSON.stringify(schools));
+  }, [schools]);
+
+  useEffect(() => {
+    localStorage.setItem('eduplan_censusSubmitted', censusSubmitted);
+  }, [censusSubmitted]);
+
+  useEffect(() => {
+    localStorage.setItem('eduplan_censusProfile', censusProfile);
+  }, [censusProfile]);
+
+  useEffect(() => {
+    localStorage.setItem('eduplan_censusAnswers', JSON.stringify(censusAnswers));
+  }, [censusAnswers]);
+
+  useEffect(() => {
+    localStorage.setItem('eduplan_quizAnswers', JSON.stringify(quizAnswers));
+  }, [quizAnswers]);
+
+  useEffect(() => {
+    localStorage.setItem('eduplan_quizSubmitted', JSON.stringify(quizSubmitted));
+  }, [quizSubmitted]);
+
+  useEffect(() => {
+    localStorage.setItem('eduplan_quizResults', JSON.stringify(quizResults));
+  }, [quizResults]);
+
+  useEffect(() => {
+    localStorage.setItem('eduplan_showAdvancedMenu', showAdvancedMenu);
+  }, [showAdvancedMenu]);
 
   // Efeito para controlar a orientação da página (retrato/paisagem) dinamicamente na impressão
   useEffect(() => {
@@ -282,11 +375,12 @@ export const LessonPlanForm = () => {
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
+        setErrorMsg(errJson.message || 'Falha na comunicação com o servidor de Inteligência Artificial.');
         if (errJson.error === 'Chave API não configurada') {
-          setEnvWarning(true);
-        } else {
-          setErrorMsg(errJson.message || 'Falha ao processar plano de aula no servidor. Verifique o console do backend.');
+          setEnvWarning(true); // Exibe o banner amigável de orientação do .env
         }
+        clearInterval(stepInterval);
+        setLoading(false);
         return;
       }
 
@@ -308,16 +402,15 @@ export const LessonPlanForm = () => {
         desenvolvimentoMetodologico: planJson.desenvolvimentoMetodologico,
         avaliacao: planJson.avaliacao,
         materialAdaptado: planJson.materialAdaptado,
-        observacoes: planJson.observacoes
+        observacoes: planJson.observacoes,
+        roteiroDinamica: planJson.roteiroDinamica
       });
 
     } catch (err) {
       clearInterval(stepInterval);
       setLoading(false);
-      console.error(err);
-      setErrorMsg(
-        `Erro de Conexão: Não foi possível se comunicar com o backend do EduPlan-SaaS. Certifique-se de que o servidor Node está rodando em ${API_BASE_URL}!`
-      );
+      setErrorMsg('Erro de conexão com o servidor backend. Certifique-se de que o backend está ativo na porta 3000.');
+      console.error("Erro de conexão com o servidor:", err);
     }
   };
 
@@ -347,7 +440,7 @@ export const LessonPlanForm = () => {
 
       if (!response.ok) {
         const errJson = await response.json().catch(() => ({}));
-        setErrorMsg(errJson.message || 'Falha ao processar folha de atividades no servidor. Verifique o console do backend.');
+        setErrorMsg(errJson.message || 'Falha ao gerar a folha de atividades via Inteligência Artificial.');
         return;
       }
 
@@ -356,12 +449,11 @@ export const LessonPlanForm = () => {
 
     } catch (err) {
       setLoadingActivity(false);
-      console.error(err);
-      setErrorMsg(
-        `Erro de Conexão: Não foi possível se comunicar com o backend do EduPlan-SaaS para gerar as atividades. Certifique-se de que o servidor está rodando em ${API_BASE_URL}!`
-      );
+      setErrorMsg('Erro de conexão com o servidor ao gerar atividades.');
+      console.error("Erro de conexão ao gerar atividades:", err);
     }
   };
+
 
   const exportToWord = () => {
     if (!generatedPlan) return;
@@ -634,14 +726,33 @@ export const LessonPlanForm = () => {
 
           {/* Perfil de Usuário Logado */}
           <div className="user-profile" style={{ marginBottom: '24px' }}>
-            <div className="user-avatar">MS</div>
+            <div className="user-avatar">
+              {profile?.full_name ? profile.full_name.substring(0, 2).toUpperCase() : 'MS'}
+            </div>
             <div className="user-info">
-              <span className="user-name">Prof. {nomeProfessor}</span>
-              <span className="user-role">Plano Premium ✨</span>
+              <span className="user-name" style={{ textTransform: 'uppercase' }}>
+                Prof. {profile?.full_name ? profile.full_name.split(' ')[0] : nomeProfessor}
+              </span>
+              <span className="user-role" style={{ fontSize: '11px' }}>
+                {profile?.role === 'coordinator' ? 'Pedagogo / Gestor 🗂️' : 'Plano Premium ✨'}
+              </span>
             </div>
           </div>
 
-          <nav className="menu-list">
+          {/* Seção 1: Espaço do Professor (Foco do dia a dia) */}
+          <div style={{ padding: '0 16px', marginBottom: '8px' }}>
+            <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Espaço do Professor
+            </span>
+          </div>
+          <nav className="menu-list" style={{ marginBottom: '24px' }}>
+            <div 
+              className={`menu-item ${activeTab === 'home' ? 'active' : ''}`}
+              onClick={() => setActiveTab('home')}
+            >
+              <span className="menu-icon">🏠</span>
+              <span>Início / Dashboard</span>
+            </div>
             <div 
               className={`menu-item ${activeTab === 'generator' ? 'active' : ''}`}
               onClick={() => setActiveTab('generator')}
@@ -656,18 +767,75 @@ export const LessonPlanForm = () => {
               <span className="menu-icon">📂</span>
               <span>Meus Planos ({savedPlans.length})</span>
             </div>
-            <div 
-              className={`menu-item ${activeTab === 'prefeitura' ? 'active' : ''}`}
-              onClick={() => setActiveTab('prefeitura')}
-            >
-              <span className="menu-icon">🏢</span>
-              <span>Painel da Prefeitura</span>
-            </div>
           </nav>
+
+          {/* Seção 2: Secretaria & Gestão (Módulos de Escala/Demonstração) */}
+          <div style={{ 
+            padding: '0 16px', 
+            marginBottom: '8px', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            borderTop: '1px solid var(--border-color)',
+            paddingTop: '20px'
+          }}>
+            <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              Gestão & Computação
+            </span>
+            <button 
+              type="button"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--primary)',
+                fontSize: '11px',
+                fontWeight: '800',
+                cursor: 'pointer',
+                padding: '4px 8px',
+                borderRadius: '4px'
+              }}
+              onClick={() => setShowAdvancedMenu(!showAdvancedMenu)}
+            >
+              {showAdvancedMenu ? 'Recolher 🔼' : 'Expandir 🔽'}
+            </button>
+          </div>
+
+          {showAdvancedMenu && (
+            <nav className="menu-list fade-in">
+              <div 
+                className={`menu-item ${activeTab === 'prefeitura' ? 'active' : ''}`}
+                onClick={() => setActiveTab('prefeitura')}
+              >
+                <span className="menu-icon">🏢</span>
+                <span>Painel da Prefeitura</span>
+              </div>
+              <div 
+                className={`menu-item ${activeTab === 'diagnostico' ? 'active' : ''}`}
+                onClick={() => setActiveTab('diagnostico')}
+              >
+                <span className="menu-icon">📊</span>
+                <span>Censo Digital</span>
+              </div>
+              <div 
+                className={`menu-item ${activeTab === 'training' ? 'active' : ''}`}
+                onClick={() => setActiveTab('training')}
+              >
+                <span className="menu-icon">🎓</span>
+                <span>Formação de Professores</span>
+              </div>
+              <div 
+                className={`menu-item ${activeTab === 'games' ? 'active' : ''}`}
+                onClick={() => setActiveTab('games')}
+              >
+                <span className="menu-icon">🕹️</span>
+                <span>Laboratório de Jogos</span>
+              </div>
+            </nav>
+          )}
         </div>
 
         {/* Rodapé da Sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <button 
             className="btn-secondary" 
             style={{ justifyContent: 'center' }}
@@ -675,6 +843,23 @@ export const LessonPlanForm = () => {
           >
             {darkMode ? '☀️ Tema Claro' : '🌙 Tema Escuro'}
           </button>
+          
+          {onLogout && (
+            <button 
+              type="button"
+              className="btn-secondary" 
+              style={{ 
+                justifyContent: 'center', 
+                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                color: '#fca5a5',
+                borderColor: 'rgba(239, 68, 68, 0.2)'
+              }}
+              onClick={onLogout}
+            >
+              <span>🚪 Sair da Minha Conta</span>
+            </button>
+          )}
+
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
             EduPlan v1.0.0 &copy; 2026
           </div>
@@ -710,6 +895,7 @@ export const LessonPlanForm = () => {
             <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
               💡 <em>Dica: Você pode conseguir uma chave de API gratuita acessando o <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontWeight: 'bold' }}>Google AI Studio</a>.</em>
             </p>
+
           </div>
         )}
 
@@ -731,6 +917,12 @@ export const LessonPlanForm = () => {
 
         <header className="header-section">
           <div className="header-title">
+            {activeTab === 'home' && (
+              <>
+                <h1>Olá, Prof. <span className="text-gradient">{nomeProfessor}</span>! 👋</h1>
+                <p>Bem-vindo ao portal EduPlan. O que vamos planejar de incrível hoje?</p>
+              </>
+            )}
             {activeTab === 'generator' && (
               <>
                 <h1>Ficha de Registro <span className="text-gradient">Oficial BNCC</span></h1>
@@ -769,6 +961,224 @@ export const LessonPlanForm = () => {
             )}
           </div>
         </header>
+
+        {/* 0. ABA DE INÍCIO (DASHBOARD) */}
+        {activeTab === 'home' && (
+          <div className="fade-in">
+            {/* Hero Banner */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(217, 70, 239, 0.08) 100%)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '32px',
+              marginBottom: '32px',
+              position: 'relative',
+              overflow: 'hidden',
+              boxShadow: 'var(--shadow-premium)'
+            }}>
+              <div style={{ position: 'relative', zIndex: 2 }}>
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: '800',
+                  color: 'var(--primary)',
+                  backgroundColor: 'var(--primary-glow)',
+                  padding: '4px 10px',
+                  borderRadius: '50px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px',
+                  display: 'inline-block',
+                  marginBottom: '12px'
+                }}>
+                  💡 DICA PEDAGÓGICA DO DIA
+                </span>
+                <h2 style={{ fontSize: '22px', fontWeight: '800', margin: '0 0 12px 0', fontFamily: 'var(--font-heading)' }}>
+                  A Computação Desplugada transforma a aprendizagem!
+                </h2>
+                <p style={{ margin: 0, fontSize: '15px', color: 'var(--text-secondary)', lineHeight: '160%', maxWidth: '800px' }}>
+                  Integrar o <strong>Pensamento Computacional</strong> sem o uso imediato de telas (usando o corpo, desenhos e receitas lógicas) ajuda a reter o foco de estudantes da Educação Infantil e Anos Iniciais, reduzindo fobias digitais e gerando excelente letramento conceitual.
+                </p>
+              </div>
+              <div style={{
+                position: 'absolute',
+                right: '-20px',
+                bottom: '-30px',
+                fontSize: '140px',
+                opacity: 0.05,
+                userSelect: 'none',
+                pointerEvents: 'none'
+              }}>
+                💡
+              </div>
+            </div>
+
+            {/* Grid de Métricas Rápidas */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '24px',
+              marginBottom: '40px'
+            }}>
+              {/* Card 1: Planos */}
+              <div className="form-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '24px' }}>📂</span>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Planos Salvos</span>
+                <strong style={{ fontSize: '28px', color: 'var(--primary)', margin: '4px 0' }}>{savedPlans.length}</strong>
+                <span 
+                  onClick={() => setActiveTab('myplans')}
+                  style={{ fontSize: '13px', color: 'var(--primary)', fontWeight: '700', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '8px' }}
+                >
+                  Ver meus planos ➔
+                </span>
+              </div>
+
+              {/* Card 2: Escola */}
+              <div className="form-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '24px' }}>🏫</span>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Unidade Principal</span>
+                <strong style={{ fontSize: '15px', color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', margin: '8px 0' }}>
+                  {unidadeEnsino}
+                </strong>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Homologada na Rede</span>
+              </div>
+
+              {/* Card 3: Turma */}
+              <div className="form-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '24px' }}>🧑‍🏫</span>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Classe / Turno</span>
+                <strong style={{ fontSize: '15px', color: 'var(--text-primary)', margin: '8px 0' }}>
+                  {turma}
+                </strong>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Ensino Fundamental</span>
+              </div>
+
+              {/* Card 4: Certificação */}
+              <div className="form-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <span style={{ fontSize: '24px' }}>🏆</span>
+                <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Formação BNCC</span>
+                <strong style={{ fontSize: '15px', color: (quizSubmitted[0] && quizSubmitted[1] && quizSubmitted[2]) ? '#10b981' : '#f59e0b', margin: '8px 0' }}>
+                  {(quizSubmitted[0] && quizSubmitted[1] && quizSubmitted[2]) ? '✓ Certificado Liberado' : 'Em Andamento'}
+                </strong>
+                <span 
+                  onClick={() => {
+                    setShowAdvancedMenu(true);
+                    setActiveTab('training');
+                  }}
+                  style={{ fontSize: '13px', color: 'var(--primary)', fontWeight: '700', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '8px' }}
+                >
+                  Ir para Formação ➔
+                </span>
+              </div>
+            </div>
+
+            {/* Painel de Ações Rápidas */}
+            <h3 style={{ fontSize: '16px', fontWeight: '800', marginBottom: '20px', fontFamily: 'var(--font-heading)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              🛠️ Ações Rápidas do Portal
+            </h3>
+            
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: '24px',
+              marginBottom: '40px'
+            }}>
+              {/* Ação 1: Gerador de Planos */}
+              <div 
+                className="form-card" 
+                onClick={() => setActiveTab('generator')}
+                style={{ cursor: 'pointer', padding: '32px', transition: 'var(--transition)', border: '1px solid var(--border-color)' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '24px',
+                    color: 'white'
+                  }}>
+                    ⚡
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: '16px', fontWeight: '800', margin: 0 }}>Gerador de Planos</h4>
+                    <span style={{ fontSize: '12px', color: 'var(--primary)', fontWeight: '700' }}>Criar Novo Registro</span>
+                  </div>
+                </div>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '150%' }}>
+                  Crie planos de aula pedagógicos estruturados e alinhados à BNCC oficial do município com o auxílio da nossa IA.
+                </p>
+              </div>
+
+              {/* Ação 2: Formação */}
+              <div 
+                className="form-card" 
+                onClick={() => {
+                  setShowAdvancedMenu(true);
+                  setActiveTab('training');
+                }}
+                style={{ cursor: 'pointer', padding: '32px', transition: 'var(--transition)', border: '1px solid var(--border-color)' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #a855f7 0%, #d946ef 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '24px',
+                    color: 'white'
+                  }}>
+                    🎓
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: '16px', fontWeight: '800', margin: 0 }}>Formação Continuada</h4>
+                    <span style={{ fontSize: '12px', color: '#a855f7', fontWeight: '700' }}>Estudar Módulos</span>
+                  </div>
+                </div>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '150%' }}>
+                  Responda os eixos de Pensamento Computacional, Cultura Digital e Mundo Digital para receber seu certificado oficial de 40 horas.
+                </p>
+              </div>
+
+              {/* Ação 3: Simulador */}
+              <div 
+                className="form-card" 
+                onClick={() => {
+                  setShowAdvancedMenu(true);
+                  setActiveTab('games');
+                }}
+                style={{ cursor: 'pointer', padding: '32px', transition: 'var(--transition)', border: '1px solid var(--border-color)' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px' }}>
+                  <div style={{
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '24px',
+                    color: 'white'
+                  }}>
+                    🕹️
+                  </div>
+                  <div>
+                    <h4 style={{ fontSize: '16px', fontWeight: '800', margin: 0 }}>Laboratório de Jogos</h4>
+                    <span style={{ fontSize: '12px', color: '#06b6d4', fontWeight: '700' }}>Praticar Lógica</span>
+                  </div>
+                </div>
+                <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '150%' }}>
+                  Exercite a construção de algoritmos e depuração visual de maneira interativa e gamificada no simulador de blocos lógicos.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 1. ABA DO GERADOR DE PLANOS */}
         {activeTab === 'generator' && (
@@ -1115,7 +1525,28 @@ export const LessonPlanForm = () => {
                       }}
                       onClick={() => setCanvasView('professor')}
                     >
-                      <span>📋 Registro do Professor</span>
+                      <span>📋 Registro Oficial</span>
+                    </button>
+                    <button 
+                      type="button"
+                      className={`btn-canvas-tab ${canvasView === 'dinamica' ? 'active' : ''}`}
+                      style={{
+                        border: 'none',
+                        background: canvasView === 'dinamica' ? 'var(--primary)' : 'transparent',
+                        color: canvasView === 'dinamica' ? 'white' : 'var(--text-secondary)',
+                        padding: '8px 16px',
+                        borderRadius: 'var(--radius-sm)',
+                        fontWeight: '700',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        fontSize: '13px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                      onClick={() => setCanvasView('dinamica')}
+                    >
+                      <span>🎭 Roteiro da Dinâmica</span>
                     </button>
                     <button 
                       type="button"
@@ -1136,7 +1567,7 @@ export const LessonPlanForm = () => {
                       }}
                       onClick={() => setCanvasView('aluno')}
                     >
-                      <span>✏️ Atividades para Alunos</span>
+                      <span>✏️ Folha de Atividades</span>
                     </button>
                   </div>
 
@@ -1268,6 +1699,53 @@ export const LessonPlanForm = () => {
                         </tbody>
                       </table>
                     </div>
+                  </article>
+                )}
+
+                {/* 1.5. VISUALIZAÇÃO DO ROTEIRO DA DINÂMICA (EXCLUSIVO DO PROFESSOR) */}
+                {canvasView === 'dinamica' && (
+                  <article id="dinamica-canvas-content" className="plan-canvas" style={{ padding: '40px', backgroundColor: '#fff', color: '#1e293b', border: '3px solid var(--primary)' }}>
+                    
+                    {/* Cabeçalho do Roteiro */}
+                    <div style={{ borderBottom: '2px solid var(--primary-glow)', paddingBottom: '20px', marginBottom: '24px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                        🎭 ROTEIRO DE DINÂMICA DE SALA DE AULA (PARA O PROFESSOR)
+                      </span>
+                      <h2 style={{ fontSize: '24px', fontWeight: '800', margin: '6px 0 0 0', color: 'var(--text-primary)' }}>
+                        Como conduzir a aula: {generatedPlan.title}
+                      </h2>
+                      <p style={{ margin: '6px 0 0 0', fontSize: '14px', color: 'var(--text-secondary)' }}>
+                        Este roteiro didático especial foi elaborado para guiar suas dinâmicas, falas e mediações com os estudantes em sala de aula de forma lúdica.
+                      </p>
+                    </div>
+
+                    {/* Corpo do Roteiro */}
+                    <div style={{ fontSize: '15px', lineHeight: '165%', whiteSpace: 'pre-line', color: '#0f172a' }}>
+                      {generatedPlan.roteiroDinamica || (
+                        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                          <span style={{ fontSize: '48px', display: 'block', marginBottom: '16px' }}>🎭</span>
+                          <h4>Nenhum roteiro detalhado de dinâmica gerado.</h4>
+                          <p>O seu plano de aula antigo não possui este campo, mas as novas gerações online e offline trarão o roteiro de dinâmica completo!</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Selo do Roteiro */}
+                    <div style={{ 
+                      marginTop: '40px', 
+                      borderTop: '1px solid var(--border-color)', 
+                      paddingTop: '20px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '12px',
+                      color: 'var(--text-secondary)',
+                      fontWeight: '700'
+                    }}>
+                      <span>EduPlan SaaS - Facilitando o engajamento lúdico em sala! 🌟</span>
+                      <span>Professor: {generatedPlan.nomeProfessor}</span>
+                    </div>
+
                   </article>
                 )}
 

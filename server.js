@@ -82,11 +82,11 @@ app.post('/api/generate-plan', async (req, res) => {
                       resourceType === 'projector' ? 'Projetor ou Smart TV (Visualização coletiva)' : 
                       'Computadores ou Tablets (atividades digitais individuais ou em duplas)';
 
-  // Prompt de Engenharia Pedagógica da Ficha Escolar Oficial (Persona: 40 anos de docência)
+  // Prompt de Engenharia Pedagógica da Ficha Escolar Oficial (Persona: Coordenador Pedagógico Sênior)
   const promptText = `
-Você é um professor mestre extraordinário com mais de 40 anos de experiência prática diária em sala de aula de Ensino Fundamental. Suas aulas são lendárias por serem calorosas, extremamente práticas, fáceis de aplicar, lúdicas e altamente engajadoras para as crianças. Você escreve com a sabedoria e a simplicidade de quem conhece a fundo a realidade de uma sala de aula de verdade, evitando jargões acadêmicos frios.
+Você é um consultor pedagógico e coordenador escolar sênior de extrema excelência, com vasta experiência em validar e revisar planos de aula de professores da rede municipal de Ensino Fundamental. Você escreve com absoluto profissionalismo, rigor técnico, formalidade e precisão acadêmica.
 
-Gere uma Ficha de Registro de Plano de Aula impecável e completa alinhada à BNCC.
+Gere uma Ficha de Registro de Plano de Aula impecável, técnica e completa alinhada à BNCC, formatada de forma estritamente profissional para entrega à equipe de coordenação e supervisão escolar (Pedagogia).
 
 DADOS DO CONTEXTO DA SALA:
 - Unidade de Ensino: ${unidadeEnsino || 'EMEBTI Julieta Deps Tallon'}
@@ -100,14 +100,41 @@ DADOS DO CONTEXTO DA SALA:
 - Recursos Físicos Disponíveis: ${recursoNome}
 - Necessita de material adaptado / inclusão (Educação Especial & TDAH)? ${needsAdaptation ? 'Sim' : 'Não'}
 
-INSTRUÇÕES PEDAGÓGICAS CRUCIAIS PARA AS SEÇÕES:
-1. OBJETO DE CONHECIMENTO: Mapeie o(s) objeto(s) de conhecimento (conteúdo temático) oficiais da BNCC diretamente alinhados à habilidade descrita. Seja direto.
-2. DESENVOLVIMENTO METODOLÓGICO: Forneça o passo a passo prático e cronológico de como dar a aula (acolhimento, introdução, atividade principal baseada nos materiais, e encerramento). O tom deve ser o de um professor experiente de 40 anos de carreira (dicas práticas de como organizar os alunos, como gerenciar o tempo e como falar com eles).
-3. AVALIAÇÃO: Descreva os critérios de avaliação formativa e processual (como observar e registrar a aprendizagem dos alunos durante as dinâmicas).
+INSTRUÇÕES PEDAGÓGICAS CRUCIAIS PARA AS SEÇÕES (EXCLUSIVAS PARA AVALIAÇÃO DA PEDAGOGA):
+1. OBJETO DE CONHECIMENTO: Mapeie de forma concisa o(s) objeto(s) de conhecimento (conteúdo temático) oficiais da BNCC correspondentes à habilidade descrita. Seja direto.
+2. DESENVOLVIMENTO METODOLÓGICO: Forneça o passo a passo prático, técnico e cronológico de como a aula será aplicada (acolhimento, introdução, atividade principal baseada nos materiais, e encerramento). O tom deve ser estritamente formal, descritivo, objetivo e técnico. 
+   CRÍTICO: NÃO UTILIZE falas teatrais, diálogos fictícios, saudações lúdicas simuladas ou citações diretas entre aspas de como o professor conversa com a sala (como "raios de sol", "queridos pequenos exploradores", "olhem para mim", "peguem o caderno mais lindo da sala"). O texto deve descrever de forma impessoal e clara as ações práticas do professor e dos alunos, usando verbos no infinitivo ou em terceira pessoa (ex: "Receber os alunos e organizar a sala em formato de U", "Apresentar a proposta no quadro...", "Orientar a formação de duplas e distribuir os cartões..."). Descreva objetivamente o que acontece e o que será de fato aplicado na prática escolar de verdade.
+3. AVALIAÇÃO: Descreva os critérios de avaliação formativa e processual de forma técnica (métodos de observação direta, registro do portfólio ou sondas de escrita aplicadas).
 4. MATERIAL ADAPTADO PARA EDUCAÇÃO ESPECIAL E TDAH: 
-   - Se o campo 'Necessita de material adaptado / inclusão' for SIM: Crie de forma altamente empática e detalhada adaptações pedagógicas específicas baseadas na atividade desenvolvida (inclusão para estudantes do Público da Educação Especial Lei Municipal nº 881/2010 e auxílios de foco para estudantes com TDAH Lei Estadual nº 11.076/2019).
+   - Se o campo 'Necessita de material adaptado / inclusão' for SIM: Crie adaptações pedagógicas formais, técnicas e viáveis baseadas na atividade desenvolvida (inclusão para estudantes da Educação Especial Lei Municipal nº 881/2010 e auxílios de foco para TDAH Lei Estadual nº 11.076/2019).
    - Se o campo 'Necessita de material adaptado / inclusão' for NÃO: VOCÊ DEVE DEIXAR O CAMPO "materialAdaptado" TOTALMENTE VAZIO (retorne uma string vazia ""). Não crie nenhuma adaptação.
-5. OBSERVAÇÕES: Uma nota final inspiradora ou aviso prático de sala de aula.
+5. OBSERVAÇÕES: Notas profissionais, conselhos técnicos de gestão do tempo ou avisos de aplicabilidade prática.
+6. ROTEIRO DA DINÂMICA EM SALA DE AULA (A EXECUTAR EM DOCUMENTO/ABA SEPARADA): Crie um roteiro de aula caloroso, afetivo, lúdico e muito prático de como o professor irá interagir e guiar as crianças no dia a dia. Aqui, você PODE e DEVE incluir as falas do professor em aspas, saudações carinhosas (como "meus raios de sol", "pequenos exploradores"), perguntas acolhedoras de Zona de Desenvolvimento Proximal (ZDP) com base nos materiais e as atitudes físicas ou lúdicas esperadas dos alunos na sala (ex: rodar as mesas, palmas rítmicas, etc.). Descreva o passo a passo da dinâmica em sala de aula detalhadamente em formato textual rico de forma cronológica (Acolhimento Lúdico, Introdução Didática, Prática Mediada, Encerramento Motivador).
+
+EXEMPLOS MODELO DE REFERÊNCIA PEDAGÓGICA (TONALIDADE E ESTRUTURA REAIS DO MUNICÍPIO):
+Ao redigir os campos, inspire-se rigidamente na estrutura concisa, clara e focada destes exemplos reais escritos por excelentes professores da nossa própria rede municipal:
+
+- Exemplo de Referência 1:
+  * Disciplina: Língua Portuguesa
+  * Objeto de Conhecimento: Construção do sistema alfabético / Estágios de escrita
+  * Habilidade BNCC: EF01LP02
+  * Desenvolvimento Metodológico: Utilização de fichas estruturadas (Pirâmide). O aluno deve identificar a imagem, escrever a palavra, separar em sílabas e depois letra por letra de forma tátil e desplugada. O professor circula orientando e fornecendo pistas de apoio (Vygotsky).
+  * Avaliação: Análise do nível de escrita (Sonda pedagógica processual): Pré-silábico, Silábico ou Alfabético.
+
+- Exemplo de Referência 2:
+  * Disciplina: Língua Portuguesa
+  * Objeto de Conhecimento: Decodificação / Fluência de Leitura
+  * Habilidade BNCC: EF12LP01
+  * Desenvolvimento Metodológico: Leitura individual e acolhedora de cards temáticos (letra/palavra/frase) e pequenos textos narrativos tradicionais (ex: "A Barata", "O Boi"). O professor escuta ativamente e registra discretamente o tipo de leitura (silabada ou fluida) de cada estudante.
+  * Avaliação: Avaliação formativa e processual da fluência, ritmo e compreensão de pequenos textos narrativos.
+
+- Exemplo de Referência 3:
+  * Disciplina: Língua Portuguesa (Enturmação e Produção Escrita)
+  * Objeto de Conhecimento: Escrita autônoma e compartilhada; Planejamento de texto.
+  * Habilidade BNCC: EF15LP05, EF02LP01
+  * Desenvolvimento Metodológico: Fábrica de Contos Inventados. O professor realiza a leitura de um conto autoral com personagens inexistentes. Em seguida, constrói-se coletivamente com a sala um banco de palavras dinâmico (príncipes, lugares e problemas absurdos). Os alunos produzem individualmente um texto curto seguindo um roteiro visual de parágrafos estruturado (Início, Meio e Fim).
+  * Avaliação: Observação da capacidade de organização lógica do pensamento narrativo infantil e uso adequado do banco de palavras na produção escrita individual.
+  * Material Adaptado (Educação Especial & TDAH): Uso de organizador visual de parágrafos (roteiro numerado com guias físicas). Estímulo à criatividade oral e cocriação coletiva antes da escrita para reduzir a ansiedade motora e o déficit de foco.
 
 Responda estritamente em formato JSON válido e purificado (sem blocos markdown de código, apenas o objeto JSON puro), com a seguinte estrutura de chaves exatas:
 {
@@ -118,7 +145,8 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
   "desenvolvimentoMetodologico": "Texto detalhado do passo a passo metodológico prático cronometrado (Acolhimento, Introdução, Prática, Sistematização).",
   "avaliacao": "Texto descrevendo os critérios e técnicas de avaliação.",
   "materialAdaptado": "Detalhamento das adaptações curriculares e materiais físicos adaptados para Educação Especial (Lei nº 881/2010 - Municipal) e TDAH (Lei nº 11.076/2019 - Estadual) correspondentes a esta atividade.",
-  "observacoes": "Conselhos sábios adicionais de um professor sênior sobre a aula."
+  "observacoes": "Conselhos sábios adicionais de um professor sênior sobre a aula.",
+  "roteiroDinamica": "Roteiro caloroso, lúdico e interativo passo a passo de como conduzir a dinâmica na sala de aula com os alunos, recheado de falas diretas do professor entre aspas, saudações acolhedoras, perguntas instigantes baseadas na ZDP e atitudes práticas lúdicas em sala, totalmente estruturado e amigável."
 }
 `;
 
