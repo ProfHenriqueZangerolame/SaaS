@@ -16,7 +16,7 @@ import {
   criarAssinatura,
   primeiroPagamento,
 } from './asaas.js';
-import { blocoHabilidadesBncc } from './ragBncc.js';
+import { blocoHabilidadesBncc, blocoPlanosModelo } from './ragBncc.js';
 
 // Catálogo estático de fallback (modo MVP, sem banco)
 const PLANOS_FALLBACK = [
@@ -292,8 +292,12 @@ app.post('/api/generate-plan', async (req, res) => {
   }
   const modelId = modeloGemini(auth.plano.modelo_ia);
 
-  // RAG: habilidades BNCC oficiais do ano/componente para aterrar o Agente 1.
-  const blocoBncc = await blocoHabilidadesBncc({ subject, grade });
+  // RAG: habilidades BNCC oficiais + planos modelo do componente para aterrar
+  // o Agente 1 (códigos reais + estilo/estrutura da rede).
+  const [blocoBncc, blocoModelos] = await Promise.all([
+    blocoHabilidadesBncc({ subject, grade }),
+    blocoPlanosModelo({ subject, grade }),
+  ]);
 
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -338,31 +342,7 @@ INSTRUÇÕES PEDAGÓGICAS CRUCIAIS PARA AS SEÇÕES (EXCLUSIVAS PARA AVALIAÇÃO
 5. OBSERVAÇÕES: Notas profissionais, conselhos técnicos de gestão do tempo ou avisos de aplicabilidade prática.
 6. ROTEIRO DA DINÂMICA EM SALA DE AULA (A EXECUTAR EM DOCUMENTO/ABA SEPARADA): Crie um roteiro de aula caloroso, afetivo, lúdico e muito prático de como o professor irá interagir e guiar as crianças no dia a dia. Aqui, você PODE e DEVE incluir as falas do professor em aspas, saudações carinhosas (como "meus raios de sol", "pequenos exploradores"), perguntas acolhedoras de Zona de Desenvolvimento Proximal (ZDP) com base nos materiais e as atitudes físicas ou lúdicas esperadas dos alunos na sala (ex: rodar as mesas, palmas rítmicas, etc.). Descreva o passo a passo da dinâmica em sala de aula detalhadamente em formato textual rico de forma cronológica (Acolhimento Lúdico, Introdução Didática, Prática Mediada, Encerramento Motivador).
 
-EXEMPLOS MODELO DE REFERÊNCIA PEDAGÓGICA (TONALIDADE E ESTRUTURA REAIS DO MUNICÍPIO):
-Ao redigir os campos, inspire-se rigidamente na estrutura concisa, clara e focada destes exemplos reais escritos por excelentes professores da nossa própria rede municipal:
-
-- Exemplo de Referência 1:
-  * Disciplina: Língua Portuguesa
-  * Objeto de Conhecimento: Construção do sistema alfabético / Estágios de escrita
-  * Habilidade BNCC: EF01LP02
-  * Desenvolvimento Metodológico: Utilização de fichas estruturadas (Pirâmide). O aluno deve identificar a imagem, escrever a palavra, separar em sílabas e depois letra por letra de forma tátil e desplugada. O professor circula orientando e fornecendo pistas de apoio (Vygotsky).
-  * Avaliação: Análise do nível de escrita (Sonda pedagógica processual): Pré-silábico, Silábico ou Alfabético.
-
-- Exemplo de Referência 2:
-  * Disciplina: Língua Portuguesa
-  * Objeto de Conhecimento: Decodificação / Fluência de Leitura
-  * Habilidade BNCC: EF12LP01
-  * Desenvolvimento Metodológico: Leitura individual e acolhedora de cards temáticos (letra/palavra/frase) e pequenos textos narrativos tradicionais (ex: "A Barata", "O Boi"). O professor escuta ativamente e registra discretamente o tipo de leitura (silabada ou fluida) de cada estudante.
-  * Avaliação: Avaliação formativa e processual da fluência, ritmo e compreensão de pequenos textos narrativos.
-
-- Exemplo de Referência 3:
-  * Disciplina: Língua Portuguesa (Enturmação e Produção Escrita)
-  * Objeto de Conhecimento: Escrita autônoma e compartilhada; Planejamento de texto.
-  * Habilidade BNCC: EF15LP05, EF02LP01
-  * Desenvolvimento Metodológico: Fábrica de Contos Inventados. O professor realiza a leitura de um conto autoral com personagens inexistentes. Em seguida, constrói-se coletivamente com a sala um banco de palavras dinâmico (príncipes, lugares e problemas absurdos). Os alunos produzem individualmente um texto curto seguindo um roteiro visual de parágrafos estruturado (Início, Meio e Fim).
-  * Avaliação: Observação da capacidade de organização lógica do pensamento narrativo infantil e uso adequado do banco de palavras na produção escrita individual.
-  * Material Adaptado (Educação Especial & TDAH): Uso de organizador visual de parágrafos (roteiro numerado com guias físicas). Estímulo à criatividade oral e cocriação coletiva antes da escrita para reduzir a ansiedade motora e o déficit de foco.
-
+${blocoModelos}
 Responda estritamente em formato JSON válido e purificado (sem blocos markdown de código, apenas o objeto JSON puro), com a seguinte estrutura de chaves exatas:
 {
   "title": "Título caloroso da aula",

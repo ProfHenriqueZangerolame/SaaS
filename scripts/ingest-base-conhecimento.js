@@ -1,10 +1,12 @@
 // =====================================================================
-// Ingestão da base de conhecimento (RAG) — habilidades BNCC
-// Popula public.base_conhecimento (tipo 'bncc') a partir de
-// src/data/bncc_skills.json. Idempotente: limpa os 'bncc' e reinsere.
+// Ingestão da base de conhecimento (RAG) do PlanejaAÍ.
+// Popula public.base_conhecimento a partir de:
+//   - src/data/bncc_skills.json   -> tipo 'bncc'
+//   - src/data/planos_modelo.json -> tipo 'plano_modelo'
+// Idempotente: limpa cada tipo e reinsere.
 //
 // Requer SUPABASE_SERVICE_ROLE_KEY (creditsEnabled). Rodar com:
-//   node scripts/ingest-base-conhecimento.js
+//   npm run ingest:bncc
 // =====================================================================
 import { readFileSync } from 'fs';
 import { supabaseAdmin, creditsEnabled } from '../supabaseAdmin.js';
@@ -15,11 +17,11 @@ if (!creditsEnabled) {
   process.exit(1);
 }
 
-const skills = JSON.parse(
-  readFileSync(new URL('../src/data/bncc_skills.json', import.meta.url), 'utf-8')
-);
+function ler(arquivo) {
+  return JSON.parse(readFileSync(new URL(`../src/data/${arquivo}`, import.meta.url), 'utf-8'));
+}
 
-const linhas = skills.map((s) => ({
+const linhasBncc = ler('bncc_skills.json').map((s) => ({
   tipo: 'bncc',
   ano_escolar: s.grade,
   componente: s.subject,
@@ -28,32 +30,39 @@ const linhas = skills.map((s) => ({
   metadata: { code: s.code },
 }));
 
-async function main() {
-  console.log(`📚 Ingerindo ${linhas.length} habilidades BNCC...`);
+const linhasModelo = ler('planos_modelo.json').map((p) => ({
+  tipo: 'plano_modelo',
+  ano_escolar: p.grade,
+  componente: p.subject,
+  titulo: p.titulo,
+  conteudo_texto: p.conteudo_texto,
+  metadata: { skillCode: p.skillCode || null },
+}));
 
-  // Limpa as habilidades BNCC antigas para reingestão idempotente.
-  const { error: delErr } = await supabaseAdmin
-    .from('base_conhecimento')
-    .delete()
-    .eq('tipo', 'bncc');
+// Reingestão idempotente de um tipo: apaga e reinsere em lotes.
+async function reingerir(tipo, linhas) {
+  console.log(`📚 Ingerindo ${linhas.length} itens (tipo '${tipo}')...`);
+  const { error: delErr } = await supabaseAdmin.from('base_conhecimento').delete().eq('tipo', tipo);
   if (delErr) {
-    console.error('Erro ao limpar base anterior:', delErr.message);
+    console.error(`Erro ao limpar tipo '${tipo}':`, delErr.message);
     process.exit(1);
   }
-
-  // Insere em lotes para não estourar limites de payload.
   const TAM = 500;
   for (let i = 0; i < linhas.length; i += TAM) {
     const lote = linhas.slice(i, i + TAM);
     const { error } = await supabaseAdmin.from('base_conhecimento').insert(lote);
     if (error) {
-      console.error(`Erro no lote ${i}-${i + lote.length}:`, error.message);
+      console.error(`Erro no lote ${i}-${i + lote.length} (tipo '${tipo}'):`, error.message);
       process.exit(1);
     }
     console.log(`  ✓ ${Math.min(i + TAM, linhas.length)}/${linhas.length}`);
   }
+}
 
-  console.log('✅ Base de conhecimento BNCC ingerida com sucesso.');
+async function main() {
+  await reingerir('bncc', linhasBncc);
+  await reingerir('plano_modelo', linhasModelo);
+  console.log('✅ Base de conhecimento (BNCC + planos modelo) ingerida com sucesso.');
 }
 
 main().catch((err) => {
