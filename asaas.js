@@ -65,3 +65,8 @@ export async function primeiroPagamento(subscriptionId) {
   const pays = await asaasRequest(`/subscriptions/${subscriptionId}/payments`);
   return pays?.data?.[0] || null;
 }
+
+// Cancela (remove) a assinatura recorrente no Asaas.
+export async function cancelarAssinatura(subscriptionId) {
+  return asaasRequest(`/subscriptions/${subscriptionId}`, { method: 'DELETE' });
+}

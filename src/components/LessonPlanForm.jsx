@@ -95,6 +95,8 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
   const [deletingConta, setDeletingConta] = useState(false);
   const [deleteContaErro, setDeleteContaErro] = useState('');
   const [historicoUso, setHistoricoUso] = useState([]);
+  const [minhaAssinatura, setMinhaAssinatura] = useState(null);
+  const [cancelandoAssinatura, setCancelandoAssinatura] = useState(false);
 
   // Busca o saldo de créditos do professor no backend
   const loadSaldo = async () => {
@@ -660,9 +662,39 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
     }
   };
 
+  // Carrega os detalhes da assinatura atual (servidor).
+  const loadMinhaAssinatura = async () => {
+    if (!usaServidor) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/minha-assinatura`, { headers: await authHeaders() });
+      if (res.ok) setMinhaAssinatura(await res.json());
+    } catch {
+      /* silencioso */
+    }
+  };
+
+  const handleCancelarAssinatura = async () => {
+    if (!confirm('Cancelar sua assinatura? Você perde o acesso aos créditos ao fim do ciclo atual.')) return;
+    setCancelandoAssinatura(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/assinatura/cancelar`, {
+        method: 'POST',
+        headers: await authHeaders(),
+      });
+      if (!res.ok) throw new Error();
+      await loadMinhaAssinatura();
+      loadSaldo();
+      alert('Assinatura cancelada.');
+    } catch {
+      alert('⚠️ Não foi possível cancelar agora. Tente novamente.');
+    } finally {
+      setCancelandoAssinatura(false);
+    }
+  };
+
   // Quando o saldo confirma modo não-MVP, sincroniza com o servidor.
   useEffect(() => {
-    if (usaServidor) { loadMeusPlanos(); loadUso(); }
+    if (usaServidor) { loadMeusPlanos(); loadUso(); loadMinhaAssinatura(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usaServidor]);
 
@@ -1428,6 +1460,34 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
         {/* 1. ABA DO GERADOR DE PLANOS */}
         {activeTab === 'planos' && (
           <div className="fade-in">
+            {/* Assinatura atual */}
+            {usaServidor && minhaAssinatura?.planos && (
+              <div className="form-card" style={{ padding: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Sua assinatura</span>
+                  <div style={{ fontSize: '20px', fontWeight: '800', margin: '2px 0' }}>
+                    Plano {minhaAssinatura.planos.nome}{' '}
+                    <span style={{
+                      fontSize: '11px', fontWeight: '800', padding: '3px 10px', borderRadius: '50px', verticalAlign: 'middle',
+                      background: minhaAssinatura.status === 'ativa' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+                      color: minhaAssinatura.status === 'ativa' ? '#10b981' : '#fca5a5',
+                    }}>{minhaAssinatura.status}</span>
+                  </div>
+                  {minhaAssinatura.proximo_vencimento && (
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Próximo vencimento: {formatDateToBR(minhaAssinatura.proximo_vencimento)}</div>
+                  )}
+                </div>
+                {minhaAssinatura.status === 'ativa' && (
+                  <button
+                    type="button"
+                    onClick={handleCancelarAssinatura}
+                    disabled={cancelandoAssinatura}
+                    style={{ padding: '10px 16px', borderRadius: '10px', border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: '#fca5a5', fontWeight: '700', fontSize: '13px', cursor: cancelandoAssinatura ? 'not-allowed' : 'pointer' }}
+                  >{cancelandoAssinatura ? 'Cancelando...' : 'Cancelar assinatura'}</button>
+                )}
+              </div>
+            )}
+
             {saldo && !saldo.ilimitado && saldo.creditos_mensais != null && (
               <div className="form-card" style={{ padding: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                 <div>

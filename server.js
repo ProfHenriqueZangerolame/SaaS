@@ -15,6 +15,7 @@ import {
   criarOuObterCliente,
   criarAssinatura,
   primeiroPagamento,
+  cancelarAssinatura,
 } from './asaas.js';
 import { blocoHabilidadesBncc, blocoPlanosModelo } from './ragBncc.js';
 
@@ -204,6 +205,62 @@ app.delete('/api/conta', async (req, res) => {
   } catch (err) {
     console.error('Erro ao excluir conta:', err);
     res.status(500).json({ error: 'erro ao excluir conta', message: err.message });
+  }
+});
+
+// Detalhes da assinatura atual do professor (plano, status, vencimento).
+app.get('/api/minha-assinatura', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { data, error } = await supabaseAdmin
+      .from('assinaturas')
+      .select('status, data_inicio, proximo_vencimento, planos(nome, slug, preco_centavos, creditos_mensais)')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (error) throw error;
+
+    res.json(data || null);
+  } catch (err) {
+    console.error('Erro ao consultar assinatura:', err);
+    res.status(500).json({ error: 'erro ao consultar assinatura' });
+  }
+});
+
+// Cancela a assinatura do professor (Asaas quando ativo; senão, só no banco).
+app.post('/api/assinatura/cancelar', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { data: assin } = await supabaseAdmin
+      .from('assinaturas')
+      .select('asaas_subscription_id, status')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (!assin) return res.status(404).json({ error: 'sem assinatura' });
+
+    // Cancela no Asaas se houver gateway ativo e id de assinatura.
+    if (asaasEnabled && assin.asaas_subscription_id) {
+      try {
+        await cancelarAssinatura(assin.asaas_subscription_id);
+      } catch (e) {
+        console.warn('[Asaas] Falha ao cancelar no gateway:', e.message);
+      }
+    }
+
+    await supabaseAdmin
+      .from('assinaturas')
+      .update({ status: 'cancelada', atualizado_em: new Date().toISOString() })
+      .eq('user_id', user.id);
+
+    res.json({ cancelada: true });
+  } catch (err) {
+    console.error('Erro ao cancelar assinatura:', err);
+    res.status(500).json({ error: 'erro ao cancelar assinatura' });
   }
 });
 
