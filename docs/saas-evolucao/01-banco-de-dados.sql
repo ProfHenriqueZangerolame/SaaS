@@ -15,12 +15,71 @@ create extension if not exists "pgcrypto";
 -- create extension if not exists vector;
 
 -- ---------------------------------------------------------------------
--- 0. profiles (JA EXISTE) — apenas garante colunas novas
+-- 0. profiles — cria se nao existir (DB zerado) e garante colunas novas.
+--    1 linha por usuario do auth.users, criada automaticamente no cadastro
+--    pelo trigger on_auth_user_created (abaixo).
 -- ---------------------------------------------------------------------
+create table if not exists public.profiles (
+  id                       uuid        primary key references auth.users(id) on delete cascade,
+  full_name                text,
+  role                     text        not null default 'teacher', -- teacher | coordinator | admin
+  city                     text,
+  state                    text,
+  school_1                 text,
+  school_2                 text,
+  teaches_multiple_schools boolean     not null default false,
+  turma                    text,
+  horario_aula             text,
+  aceite_lgpd              boolean     not null default false,
+  aceite_lgpd_em           timestamptz,
+  criado_em                timestamptz not null default now(),
+  updated_at               timestamptz not null default now()
+);
+
+-- Garante as colunas em projetos onde a tabela ja existia antes.
 alter table public.profiles add column if not exists aceite_lgpd        boolean     not null default false;
 alter table public.profiles add column if not exists aceite_lgpd_em     timestamptz;
-alter table public.profiles add column if not exists role               text        not null default 'teacher'; -- teacher | coordinator
+alter table public.profiles add column if not exists role               text        not null default 'teacher';
 alter table public.profiles add column if not exists criado_em          timestamptz not null default now();
+alter table public.profiles add column if not exists updated_at         timestamptz not null default now();
+
+-- Cria a linha de profile automaticamente quando um usuario se cadastra,
+-- aproveitando os metadados enviados no signUp (full_name, role, lgpd_consent).
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, full_name, role, aceite_lgpd, aceite_lgpd_em)
+  values (
+    new.id,
+    coalesce(new.raw_user_meta_data->>'full_name', ''),
+    coalesce(new.raw_user_meta_data->>'role', 'teacher'),
+    coalesce((new.raw_user_meta_data->>'lgpd_consent')::boolean, false),
+    case
+      when new.raw_user_meta_data->>'lgpd_consent_at' is not null
+      then (new.raw_user_meta_data->>'lgpd_consent_at')::timestamptz
+      else null
+    end
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- RLS de profiles: cada usuario le e edita apenas o proprio.
+alter table public.profiles enable row level security;
+drop policy if exists "profiles_select_own" on public.profiles;
+drop policy if exists "profiles_update_own" on public.profiles;
+create policy "profiles_select_own" on public.profiles for select to authenticated using (auth.uid() = id);
+create policy "profiles_update_own" on public.profiles for update to authenticated using (auth.uid() = id) with check (auth.uid() = id);
 
 -- ---------------------------------------------------------------------
 -- 1. planos — catalogo das assinaturas (3 tiers). Leitura publica.
@@ -151,10 +210,16 @@ alter table public.planos             enable row level security;
 alter table public.base_conhecimento  enable row level security;
 
 -- Catalogo e base de conhecimento: leitura para autenticados; escrita so service_role
+drop policy if exists "planos_read" on public.planos;
+drop policy if exists "base_read"   on public.base_conhecimento;
 create policy "planos_read"  on public.planos            for select to authenticated using (true);
 create policy "base_read"    on public.base_conhecimento for select to authenticated using (true);
 
 -- Dados do usuario: dono total (CRUD pelo proprio)
+drop policy if exists "assin_owner"  on public.assinaturas;
+drop policy if exists "planos_owner" on public.planos_gerados;
+drop policy if exists "ativ_owner"   on public.atividades_geradas;
+drop policy if exists "usage_owner"  on public.usage_logs;
 create policy "assin_owner"  on public.assinaturas        for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "planos_owner" on public.planos_gerados     for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
 create policy "ativ_owner"   on public.atividades_geradas for all to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
