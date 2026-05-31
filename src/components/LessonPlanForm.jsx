@@ -827,6 +827,35 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
             </div>
           </div>
 
+          {/* Badge de Créditos (somente professor) */}
+          {saldo && profile?.role !== 'coordinator' && (
+            <div className="sidebar-credits-badge">
+              <div className="sidebar-credits-label">
+                <span>Créditos do mês</span>
+                {saldo.plano?.nome && <span className="sidebar-credits-plan-tag">{saldo.plano.nome}</span>}
+                {saldo.modoMvp && <span className="sidebar-credits-plan-tag">Modo livre</span>}
+              </div>
+              {saldo.ilimitado ? (
+                <>
+                  <div className="sidebar-credits-count">∞ <span>ilimitado ✨</span></div>
+                  <div className="sidebar-credits-bar">
+                    <div className="sidebar-credits-bar-fill" style={{ width: '100%' }} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="sidebar-credits-count">{saldo.restantes} <span>de {saldo.creditos_mensais}</span></div>
+                  <div className="sidebar-credits-bar">
+                    <div
+                      className="sidebar-credits-bar-fill"
+                      style={{ width: `${Math.max(0, Math.min(100, (saldo.restantes / saldo.creditos_mensais) * 100))}%` }}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* Seção 1: Espaço do Professor (Foco do dia a dia) */}
           <div style={{ padding: '0 16px', marginBottom: '8px' }}>
             <span style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>

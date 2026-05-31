@@ -14,6 +14,7 @@
   
   /* Estados e Neutros */
   --bg-app: #f8fafc;
+  --bg-sidebar: #f1f5f9;
   --bg-card: #ffffff;
   --text-primary: #0f172a;
   --text-secondary: #475569;
@@ -38,14 +39,15 @@
 
 /* Suporte a Tema Escuro */
 .dark-theme {
-  --bg-app: #0b0f19;
-  --bg-card: #151b2c;
-  --text-primary: #f8fafc;
+  --bg-app: #060511;
+  --bg-sidebar: #0a0818;
+  --bg-card: #0e0c1e;
+  --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --border-color: #1e293b;
-  --primary-glow: rgba(99, 102, 241, 0.25);
-  --shadow-premium: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  --text-muted: #475569;
+  --border-color: rgba(255, 255, 255, 0.07);
+  --primary-glow: rgba(99, 102, 241, 0.2);
+  --shadow-premium: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
 }
 
 body {
@@ -91,11 +93,11 @@ body {
   }
 }
 
-/* Sidebar Estilizada (Glassmorphism) */
+/* Sidebar Estilizada */
 .sidebar {
-  background-color: var(--bg-card);
+  background-color: var(--bg-sidebar);
   border-right: 1px solid var(--border-color);
-  padding: 40px 24px;
+  padding: 28px 16px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -145,32 +147,134 @@ body {
 .menu-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 14px 20px;
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  color: var(--text-muted);
   text-decoration: none;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   transition: var(--transition);
   border: 1px solid transparent;
   cursor: pointer;
+  position: relative;
 }
 
 .menu-item:hover {
   background-color: var(--primary-glow);
-  color: var(--primary);
+  color: var(--text-secondary);
 }
 
 .menu-item.active {
-  background: linear-gradient(135deg, var(--primary-glow) 0%, rgba(99, 102, 241, 0.03) 100%);
-  color: var(--primary);
-  border-color: rgba(99, 102, 241, 0.15);
+  background: linear-gradient(135deg, var(--primary-glow) 0%, rgba(99, 102, 241, 0.05) 100%);
+  color: #818cf8;
+  border-color: rgba(99, 102, 241, 0.25);
   box-shadow: var(--shadow-sm);
 }
 
+.menu-item.active::after {
+  content: '';
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
 .menu-icon {
-  font-size: 20px;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* Credits badge in sidebar */
+.sidebar-credits-badge {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08));
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 20px;
+}
+
+.sidebar-credits-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.sidebar-credits-plan-tag {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--primary);
+  background: rgba(99, 102, 241, 0.15);
+  padding: 2px 7px;
+  border-radius: 50px;
+}
+
+.sidebar-credits-count {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.sidebar-credits-count span {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.sidebar-credits-bar {
+  height: 4px;
+  background: var(--border-color);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.sidebar-credits-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #a855f7);
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+/* Sidebar section label */
+.sidebar-section-label {
+  font-size: 10px;
+  font-weight: 800;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 0 8px;
+  margin-bottom: 6px;
+  display: block;
+}
+
+/* Menu item badge (e.g., NOVO) */
+.menu-item-badge {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 50px;
+  margin-left: auto;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.menu-item-badge.badge-new {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 /* ==========================================================================
@@ -272,28 +376,59 @@ label {
   letter-spacing: 0.5px;
 }
 
-/* Inputs Premium com Glassmorphism */
+/* Inputs Premium */
 input[type="text"],
+input[type="date"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
 select,
 textarea {
   font-family: var(--font-body);
-  padding: 14px 18px;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
-  background-color: var(--bg-app);
+  background-color: rgba(255, 255, 255, 0.04);
   color: var(--text-primary);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
   outline: none;
   transition: var(--transition);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 input[type="text"]:focus,
+input[type="date"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
 select:focus,
 textarea:focus {
   border-color: var(--primary);
+  background-color: rgba(99, 102, 241, 0.06);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+/* Inputs in light mode */
+body:not(.dark-theme) input[type="text"],
+body:not(.dark-theme) input[type="date"],
+body:not(.dark-theme) input[type="email"],
+body:not(.dark-theme) input[type="password"],
+body:not(.dark-theme) input[type="number"],
+body:not(.dark-theme) select,
+body:not(.dark-theme) textarea {
+  background-color: var(--bg-app);
+}
+
+body:not(.dark-theme) input[type="text"]:focus,
+body:not(.dark-theme) input[type="date"]:focus,
+body:not(.dark-theme) input[type="email"]:focus,
+body:not(.dark-theme) input[type="password"]:focus,
+body:not(.dark-theme) input[type="number"]:focus,
+body:not(.dark-theme) select:focus,
+body:not(.dark-theme) textarea:focus {
   background-color: var(--bg-card);
-  box-shadow: 0 0 0 4px var(--primary-glow);
 }
 
 /* Botões Seletores de Recursos */
@@ -1921,6 +2056,28 @@ input:checked + .slider:before {
 .impact-list-item strong {
   color: var(--text-primary);
   font-size: 17px;
+}
+
+/* ==========================================================================
+   📱 Login responsivo — colapsa split-screen em telas estreitas
+   (inline styles vencem CSS, por isso !important nos overrides)
+   ========================================================================== */
+@media (max-width: 900px) {
+  .auth-hero {
+    display: none !important;
+  }
+  .auth-form-panel {
+    width: 100% !important;
+    flex: 1 !important;
+    border-left: none !important;
+    padding: 40px 24px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .auth-form-panel {
+    padding: 28px 16px !important;
+  }
 }
 
 
