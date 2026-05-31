@@ -1,5 +1,5 @@
 {
-  "name": "eduplan-saas",
+  "name": "planejaai",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,7 +9,8 @@
     "start": "node server.js",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ingest:bncc": "node scripts/ingest-base-conhecimento.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

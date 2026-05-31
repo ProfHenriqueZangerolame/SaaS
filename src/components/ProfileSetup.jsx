@@ -29,6 +29,12 @@ export const ProfileSetup = ({ user, profile, onProfileComplete }) => {
       horario_aula: horarioAula,
       updated_at: new Date().toISOString()
     };
+    // Se for o login local de teste (bypass Supabase)
+    if (user?.id === 'admin-test-local') {
+      onProfileComplete({ ...profile, ...profileData });
+      setLoading(false);
+      return;
+    }
 
     try {
       const { error } = await supabase

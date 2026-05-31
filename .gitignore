@@ -15,6 +15,9 @@ dist-ssr
 .env.*
 !.env.example
 
+# Ferramenta CLI clonada (não faz parte do produto)
+caveman-code
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

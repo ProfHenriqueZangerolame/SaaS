@@ -74,7 +74,24 @@ function App() {
   const handleAuthSuccess = (newSession, newUser) => {
     setSession(newSession);
     setUser(newUser);
-    fetchProfile(newUser.id);
+    if (newSession?.__isLocal) {
+      // Sessão de teste local — perfil mockado, pula Supabase
+      setProfile({
+        id: newUser.id,
+        full_name: 'Admin Teste',
+        role: 'admin',
+        city: 'Cidade Teste',
+        state: 'SP',
+        school_1: 'Escola Teste',
+        school_2: '',
+        teaches_multiple_schools: false,
+        turma: '5º Ano A',
+        horario_aula: '08:00'
+      });
+      setLoading(false);
+    } else {
+      fetchProfile(newUser.id);
+    }
   };
 
   const handleProfileComplete = (updatedProfile) => {
@@ -96,7 +113,7 @@ function App() {
       }}>
         <div className="spinner"></div>
         <p style={{ marginTop: '16px', fontSize: '14px', color: '#94a3b8' }}>
-          Carregando portal do EduPlan...
+          Carregando portal do PlanejaAÍ...
         </p>
       </div>
     );
@@ -125,7 +142,7 @@ function App() {
     );
   }
 
-  // 3. Caso autenticado e com perfil configurado: Abrir o Painel do EduPlan
+  // 3. Caso autenticado e com perfil configurado: Abrir o Painel do PlanejaAÍ
   return (
     <LessonPlanForm 
       user={user} 

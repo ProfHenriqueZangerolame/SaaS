@@ -1,6 +1,30 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { creditsEnabled, supabaseAdmin, getUserFromToken } from './supabaseAdmin.js';
+import {
+  CUSTOS,
+  modeloGemini,
+  getPlanoDoUsuario,
+  getSaldo,
+  podeGerar,
+  registrarUso,
+} from './creditos.js';
+import {
+  asaasEnabled,
+  criarOuObterCliente,
+  criarAssinatura,
+  primeiroPagamento,
+  cancelarAssinatura,
+} from './asaas.js';
+import { blocoHabilidadesBncc, blocoPlanosModelo } from './ragBncc.js';
+
+// Catálogo estático de fallback (modo MVP, sem banco)
+const PLANOS_FALLBACK = [
+  { slug: 'basico', nome: 'Básico', preco_centavos: 1900, creditos_mensais: 20, modelo_ia: 'flash', permite_imagem: false, destaque: false },
+  { slug: 'profissional', nome: 'Profissional', preco_centavos: 3000, creditos_mensais: 60, modelo_ia: 'flash', permite_imagem: true, destaque: true },
+  { slug: 'premium', nome: 'Premium', preco_centavos: 5900, creditos_mensais: null, modelo_ia: 'pro', permite_imagem: true, destaque: false },
+];
 
 // Carregar variáveis de ambiente do arquivo .env
 dotenv.config();
@@ -18,9 +42,368 @@ app.use(express.json());
 app.get('/api/status', (req, res) => {
   res.json({
     status: 'online',
-    message: 'Backend do EduPlan-SaaS está operacional e seguro!',
-    iaConnected: !!process.env.GEMINI_API_KEY
+    message: 'Backend do PlanejaAÍ está operacional e seguro!',
+    iaConnected: !!process.env.GEMINI_API_KEY,
+    creditsEnabled
   });
+});
+
+/**
+ * Resolve o usuário autenticado e o plano dele, e valida se há crédito
+ * suficiente para `custo`. Em modo MVP livre (créditos desligados), libera tudo.
+ *
+ * Retorna { ok: true, userId, plano } quando pode prosseguir, ou
+ * { ok: false, status, body } com o erro HTTP a ser devolvido.
+ */
+async function autorizarGeracao(req, custo) {
+  // Modo MVP livre: sem controle, comportamento idêntico ao de hoje.
+  if (!creditsEnabled) {
+    return { ok: true, userId: null, plano: { modelo_ia: 'flash', permite_imagem: true } };
+  }
+
+  const user = await getUserFromToken(req.headers.authorization);
+  if (!user) {
+    return { ok: false, status: 401, body: { error: 'não autenticado', message: 'Faça login para gerar conteúdo.' } };
+  }
+
+  const plano = await getPlanoDoUsuario(user.id);
+  if (!plano) {
+    return {
+      ok: false,
+      status: 402,
+      body: { error: 'sem assinatura', message: 'Você ainda não tem um plano ativo. Escolha um plano para começar.' },
+    };
+  }
+
+  const liberado = await podeGerar(user.id, custo);
+  if (!liberado) {
+    return {
+      ok: false,
+      status: 402,
+      body: { error: 'sem créditos', message: 'Seus créditos do mês acabaram. Faça upgrade para continuar gerando.' },
+    };
+  }
+
+  return { ok: true, userId: user.id, plano };
+}
+
+// Saldo de créditos do mês atual do professor autenticado.
+app.get('/api/saldo', async (req, res) => {
+  try {
+    if (!creditsEnabled) {
+      return res.json({ ilimitado: true, creditos_mensais: null, consumidos: 0, restantes: 999999, modoMvp: true });
+    }
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+    const saldo = await getSaldo(user.id);
+    const plano = await getPlanoDoUsuario(user.id);
+    res.json({ ...saldo, plano: plano || null });
+  } catch (err) {
+    console.error('Erro ao consultar saldo:', err);
+    res.status(500).json({ error: 'erro ao consultar saldo' });
+  }
+});
+
+// Catálogo de planos disponíveis (público).
+app.get('/api/planos', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.json(PLANOS_FALLBACK);
+    const { data, error } = await supabaseAdmin
+      .from('planos')
+      .select('slug, nome, preco_centavos, creditos_mensais, modelo_ia, permite_imagem, destaque')
+      .eq('ativo', true)
+      .order('ordem');
+    if (error) throw error;
+    res.json(data?.length ? data : PLANOS_FALLBACK);
+  } catch (err) {
+    console.error('Erro ao listar planos:', err);
+    res.status(500).json({ error: 'erro ao listar planos' });
+  }
+});
+
+// Inicia a assinatura do professor no Asaas (ou em modo simulação).
+app.post('/api/assinatura', async (req, res) => {
+  try {
+    if (!creditsEnabled) {
+      return res.status(503).json({ error: 'indisponível', message: 'Controle de créditos desligado no servidor.' });
+    }
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { planoSlug, cpfCnpj } = req.body;
+    if (!planoSlug) return res.status(400).json({ error: 'plano não informado' });
+
+    const { data: plano } = await supabaseAdmin
+      .from('planos')
+      .select('*')
+      .eq('slug', planoSlug)
+      .maybeSingle();
+    if (!plano) return res.status(404).json({ error: 'plano inexistente' });
+
+    // Modo simulação: ativa direto, sem cobrar (útil para testes locais).
+    if (!asaasEnabled) {
+      await supabaseAdmin.from('assinaturas').upsert(
+        { user_id: user.id, plano_id: plano.id, status: 'ativa', data_inicio: new Date().toISOString(), atualizado_em: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      );
+      return res.json({ simulado: true, message: `Plano ${plano.nome} ativado em modo simulação (Asaas desligado).` });
+    }
+
+    const cliente = await criarOuObterCliente({
+      nome: user.user_metadata?.full_name || user.email,
+      email: user.email,
+      cpfCnpj,
+      externalReference: user.id,
+    });
+    const assinatura = await criarAssinatura({
+      customerId: cliente.id,
+      valor: plano.preco_centavos / 100,
+      descricao: `PlanejaAÍ - ${plano.nome}`,
+      externalReference: user.id,
+    });
+    const pagamento = await primeiroPagamento(assinatura.id);
+
+    await supabaseAdmin.from('assinaturas').upsert(
+      {
+        user_id: user.id,
+        plano_id: plano.id,
+        status: 'pendente',
+        asaas_customer_id: cliente.id,
+        asaas_subscription_id: assinatura.id,
+        proximo_vencimento: assinatura.nextDueDate || null,
+        atualizado_em: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    );
+
+    res.json({ subscriptionId: assinatura.id, invoiceUrl: pagamento?.invoiceUrl || null });
+  } catch (err) {
+    console.error('Erro ao criar assinatura:', err);
+    res.status(500).json({ error: 'erro ao criar assinatura', message: err.message });
+  }
+});
+
+// Exclusão definitiva da conta + dados (direito de exclusão da LGPD).
+// Apagar o usuário em auth.users cascateia para assinaturas, planos_gerados,
+// atividades_geradas, usage_logs e profiles (FKs on delete cascade).
+app.delete('/api/conta', async (req, res) => {
+  try {
+    if (!creditsEnabled) {
+      return res.status(503).json({
+        error: 'indisponível',
+        message: 'Exclusão de conta requer a service role do Supabase configurada no servidor.',
+      });
+    }
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(user.id);
+    if (error) throw error;
+
+    console.log(`[LGPD] Conta ${user.id} excluída a pedido do titular.`);
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('Erro ao excluir conta:', err);
+    res.status(500).json({ error: 'erro ao excluir conta', message: err.message });
+  }
+});
+
+// Detalhes da assinatura atual do professor (plano, status, vencimento).
+app.get('/api/minha-assinatura', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { data, error } = await supabaseAdmin
+      .from('assinaturas')
+      .select('status, data_inicio, proximo_vencimento, planos(nome, slug, preco_centavos, creditos_mensais)')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (error) throw error;
+
+    res.json(data || null);
+  } catch (err) {
+    console.error('Erro ao consultar assinatura:', err);
+    res.status(500).json({ error: 'erro ao consultar assinatura' });
+  }
+});
+
+// Cancela a assinatura do professor (Asaas quando ativo; senão, só no banco).
+app.post('/api/assinatura/cancelar', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { data: assin } = await supabaseAdmin
+      .from('assinaturas')
+      .select('asaas_subscription_id, status')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (!assin) return res.status(404).json({ error: 'sem assinatura' });
+
+    // Cancela no Asaas se houver gateway ativo e id de assinatura.
+    if (asaasEnabled && assin.asaas_subscription_id) {
+      try {
+        await cancelarAssinatura(assin.asaas_subscription_id);
+      } catch (e) {
+        console.warn('[Asaas] Falha ao cancelar no gateway:', e.message);
+      }
+    }
+
+    await supabaseAdmin
+      .from('assinaturas')
+      .update({ status: 'cancelada', atualizado_em: new Date().toISOString() })
+      .eq('user_id', user.id);
+
+    res.json({ cancelada: true });
+  } catch (err) {
+    console.error('Erro ao cancelar assinatura:', err);
+    res.status(500).json({ error: 'erro ao cancelar assinatura' });
+  }
+});
+
+// Histórico de consumo de créditos do professor (últimos lançamentos).
+app.get('/api/uso', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { data, error } = await supabaseAdmin
+      .from('usage_logs')
+      .select('tipo, creditos, modelo_ia, imagens_geradas, criado_em')
+      .eq('user_id', user.id)
+      .order('criado_em', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+
+    res.json(data || []);
+  } catch (err) {
+    console.error('Erro ao listar uso:', err);
+    res.status(500).json({ error: 'erro ao listar uso' });
+  }
+});
+
+// ---------------------------------------------------------------------
+// Planos de aula salvos pelo professor (persistência em planos_gerados).
+// Só ativo com créditos ligados (service role). Em modo MVP o frontend
+// continua usando o localStorage.
+// ---------------------------------------------------------------------
+
+// Lista os planos salvos do professor.
+app.get('/api/meus-planos', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { data, error } = await supabaseAdmin
+      .from('planos_gerados')
+      .select('id, conteudo_json, criado_em')
+      .eq('user_id', user.id)
+      .order('criado_em', { ascending: false });
+    if (error) throw error;
+
+    // Devolve o objeto do plano com o id do banco anexado.
+    res.json((data || []).map((r) => ({ _dbId: r.id, _criadoEm: r.criado_em, ...r.conteudo_json })));
+  } catch (err) {
+    console.error('Erro ao listar planos salvos:', err);
+    res.status(500).json({ error: 'erro ao listar planos' });
+  }
+});
+
+// Salva um plano de aula gerado.
+app.post('/api/meus-planos', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const plano = req.body?.plano;
+    if (!plano || typeof plano !== 'object') return res.status(400).json({ error: 'plano inválido' });
+
+    const { data, error } = await supabaseAdmin
+      .from('planos_gerados')
+      .insert({
+        user_id: user.id,
+        subject: plano.subject || null,
+        grade: plano.grade || null,
+        trimester: plano.trimester || null,
+        skill_code: plano.skillCode || null,
+        skill_desc: plano.skillDesc || null,
+        resource_type: plano.resourceType || null,
+        unidade_ensino: plano.unidadeEnsino || null,
+        nome_professor: plano.nomeProfessor || null,
+        turma: plano.turma || null,
+        data_periodo: plano.dataPeriodo || null,
+        conteudo_json: plano,
+        modelo_ia: plano.modelo_ia || 'flash',
+      })
+      .select('id, criado_em')
+      .single();
+    if (error) throw error;
+
+    res.json({ id: data.id, criado_em: data.criado_em });
+  } catch (err) {
+    console.error('Erro ao salvar plano:', err);
+    res.status(500).json({ error: 'erro ao salvar plano', message: err.message });
+  }
+});
+
+// Exclui um plano salvo do professor.
+app.delete('/api/meus-planos/:id', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { error } = await supabaseAdmin
+      .from('planos_gerados')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', user.id);
+    if (error) throw error;
+
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('Erro ao excluir plano:', err);
+    res.status(500).json({ error: 'erro ao excluir plano' });
+  }
+});
+
+// Webhook do Asaas: libera/suspende o acesso conforme o pagamento.
+app.post('/api/webhooks/asaas', async (req, res) => {
+  try {
+    // Verificação opcional do token do webhook (configure em ASAAS_WEBHOOK_TOKEN).
+    const expected = process.env.ASAAS_WEBHOOK_TOKEN;
+    if (expected && req.headers['asaas-access-token'] !== expected) {
+      return res.sendStatus(401);
+    }
+    if (!creditsEnabled) return res.sendStatus(200);
+
+    const evento = req.body?.event;
+    const subId = req.body?.payment?.subscription;
+    if (!subId) return res.sendStatus(200);
+
+    let novoStatus = null;
+    if (['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'].includes(evento)) novoStatus = 'ativa';
+    else if (evento === 'PAYMENT_OVERDUE') novoStatus = 'suspensa';
+    else if (['PAYMENT_DELETED', 'PAYMENT_REFUNDED'].includes(evento)) novoStatus = 'cancelada';
+
+    if (novoStatus) {
+      await supabaseAdmin
+        .from('assinaturas')
+        .update({ status: novoStatus, atualizado_em: new Date().toISOString() })
+        .eq('asaas_subscription_id', subId);
+      console.log(`[Asaas] Assinatura ${subId} -> ${novoStatus} (${evento})`);
+    }
+    res.sendStatus(200); // sempre 200 para o Asaas não reenviar em loop
+  } catch (err) {
+    console.error('Erro no webhook Asaas:', err);
+    res.sendStatus(200);
+  }
 });
 
 // Função auxiliar de requisição robusta com retentativas automáticas e backoff exponencial
@@ -58,6 +441,7 @@ app.post('/api/generate-plan', async (req, res) => {
     subject,
     grade,
     trimester,
+    duracaoAula,
     skillCode,
     skillDesc,
     resourceType,
@@ -67,6 +451,20 @@ app.post('/api/generate-plan', async (req, res) => {
     turma,
     dataPeriodo
   } = req.body;
+
+  // Autorização de crédito (1 crédito por plano de aula). Em modo MVP, libera.
+  const auth = await autorizarGeracao(req, CUSTOS.plano);
+  if (!auth.ok) {
+    return res.status(auth.status).json(auth.body);
+  }
+  const modelId = modeloGemini(auth.plano.modelo_ia);
+
+  // RAG: habilidades BNCC oficiais + planos modelo do componente para aterrar
+  // o Agente 1 (códigos reais + estilo/estrutura da rede).
+  const [blocoBncc, blocoModelos] = await Promise.all([
+    blocoHabilidadesBncc({ subject, grade }),
+    blocoPlanosModelo({ subject, grade }),
+  ]);
 
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -96,13 +494,15 @@ DADOS DO CONTEXTO DA SALA:
 - Disciplina / Componente Curricular: ${subject}
 - Ano Escolar: ${grade}
 - Período: ${trimester}
+- Duração / Quantidade de aulas: ${duracaoAula || '1 aula (~50 min)'}
 - Habilidade(s) Principal(is) da BNCC: ${skillCode} (Descrição: ${skillDesc})
 - Recursos Físicos Disponíveis: ${recursoNome}
 - Necessita de material adaptado / inclusão (Educação Especial & TDAH)? ${needsAdaptation ? 'Sim' : 'Não'}
-
+${blocoBncc}
 INSTRUÇÕES PEDAGÓGICAS CRUCIAIS PARA AS SEÇÕES (EXCLUSIVAS PARA AVALIAÇÃO DA PEDAGOGA):
 1. OBJETO DE CONHECIMENTO: Mapeie de forma concisa o(s) objeto(s) de conhecimento (conteúdo temático) oficiais da BNCC correspondentes à habilidade descrita. Seja direto.
-2. DESENVOLVIMENTO METODOLÓGICO: Forneça o passo a passo prático, técnico e cronológico de como a aula será aplicada (acolhimento, introdução, atividade principal baseada nos materiais, e encerramento). O tom deve ser estritamente formal, descritivo, objetivo e técnico. 
+2. DESENVOLVIMENTO METODOLÓGICO: Forneça o passo a passo prático, técnico e cronológico de como a aula será aplicada (acolhimento, introdução, atividade principal baseada nos materiais, e encerramento). O tom deve ser estritamente formal, descritivo, objetivo e técnico.
+   GESTÃO DO TEMPO (OBRIGATÓRIO): Dimensione rigorosamente o plano para a DURAÇÃO informada (${duracaoAula || '1 aula (~50 min)'}). Distribua tempos aproximados em minutos para cada etapa, somando o total disponível. Para 1 aula (~50 min), proponha uma sequência enxuta e factível em um único tempo; para 2 aulas geminadas (~100 min) ou 3 aulas (~150 min), organize a metodologia por blocos/aulas (ex: "1ª aula", "2ª aula"), com aprofundamento e atividades coerentes com o tempo total — NUNCA simplesmente repetindo o conteúdo. A carga de atividades deve ser proporcional ao tempo: não sobrecarregue 50 min nem deixe 100/150 min com pouco conteúdo.
    CRÍTICO: NÃO UTILIZE falas teatrais, diálogos fictícios, saudações lúdicas simuladas ou citações diretas entre aspas de como o professor conversa com a sala (como "raios de sol", "queridos pequenos exploradores", "olhem para mim", "peguem o caderno mais lindo da sala"). O texto deve descrever de forma impessoal e clara as ações práticas do professor e dos alunos, usando verbos no infinitivo ou em terceira pessoa (ex: "Receber os alunos e organizar a sala em formato de U", "Apresentar a proposta no quadro...", "Orientar a formação de duplas e distribuir os cartões..."). Descreva objetivamente o que acontece e o que será de fato aplicado na prática escolar de verdade.
 3. AVALIAÇÃO: Descreva os critérios de avaliação formativa e processual de forma técnica (métodos de observação direta, registro do portfólio ou sondas de escrita aplicadas).
 4. MATERIAL ADAPTADO PARA EDUCAÇÃO ESPECIAL E TDAH: 
@@ -111,31 +511,7 @@ INSTRUÇÕES PEDAGÓGICAS CRUCIAIS PARA AS SEÇÕES (EXCLUSIVAS PARA AVALIAÇÃO
 5. OBSERVAÇÕES: Notas profissionais, conselhos técnicos de gestão do tempo ou avisos de aplicabilidade prática.
 6. ROTEIRO DA DINÂMICA EM SALA DE AULA (A EXECUTAR EM DOCUMENTO/ABA SEPARADA): Crie um roteiro de aula caloroso, afetivo, lúdico e muito prático de como o professor irá interagir e guiar as crianças no dia a dia. Aqui, você PODE e DEVE incluir as falas do professor em aspas, saudações carinhosas (como "meus raios de sol", "pequenos exploradores"), perguntas acolhedoras de Zona de Desenvolvimento Proximal (ZDP) com base nos materiais e as atitudes físicas ou lúdicas esperadas dos alunos na sala (ex: rodar as mesas, palmas rítmicas, etc.). Descreva o passo a passo da dinâmica em sala de aula detalhadamente em formato textual rico de forma cronológica (Acolhimento Lúdico, Introdução Didática, Prática Mediada, Encerramento Motivador).
 
-EXEMPLOS MODELO DE REFERÊNCIA PEDAGÓGICA (TONALIDADE E ESTRUTURA REAIS DO MUNICÍPIO):
-Ao redigir os campos, inspire-se rigidamente na estrutura concisa, clara e focada destes exemplos reais escritos por excelentes professores da nossa própria rede municipal:
-
-- Exemplo de Referência 1:
-  * Disciplina: Língua Portuguesa
-  * Objeto de Conhecimento: Construção do sistema alfabético / Estágios de escrita
-  * Habilidade BNCC: EF01LP02
-  * Desenvolvimento Metodológico: Utilização de fichas estruturadas (Pirâmide). O aluno deve identificar a imagem, escrever a palavra, separar em sílabas e depois letra por letra de forma tátil e desplugada. O professor circula orientando e fornecendo pistas de apoio (Vygotsky).
-  * Avaliação: Análise do nível de escrita (Sonda pedagógica processual): Pré-silábico, Silábico ou Alfabético.
-
-- Exemplo de Referência 2:
-  * Disciplina: Língua Portuguesa
-  * Objeto de Conhecimento: Decodificação / Fluência de Leitura
-  * Habilidade BNCC: EF12LP01
-  * Desenvolvimento Metodológico: Leitura individual e acolhedora de cards temáticos (letra/palavra/frase) e pequenos textos narrativos tradicionais (ex: "A Barata", "O Boi"). O professor escuta ativamente e registra discretamente o tipo de leitura (silabada ou fluida) de cada estudante.
-  * Avaliação: Avaliação formativa e processual da fluência, ritmo e compreensão de pequenos textos narrativos.
-
-- Exemplo de Referência 3:
-  * Disciplina: Língua Portuguesa (Enturmação e Produção Escrita)
-  * Objeto de Conhecimento: Escrita autônoma e compartilhada; Planejamento de texto.
-  * Habilidade BNCC: EF15LP05, EF02LP01
-  * Desenvolvimento Metodológico: Fábrica de Contos Inventados. O professor realiza a leitura de um conto autoral com personagens inexistentes. Em seguida, constrói-se coletivamente com a sala um banco de palavras dinâmico (príncipes, lugares e problemas absurdos). Os alunos produzem individualmente um texto curto seguindo um roteiro visual de parágrafos estruturado (Início, Meio e Fim).
-  * Avaliação: Observação da capacidade de organização lógica do pensamento narrativo infantil e uso adequado do banco de palavras na produção escrita individual.
-  * Material Adaptado (Educação Especial & TDAH): Uso de organizador visual de parágrafos (roteiro numerado com guias físicas). Estímulo à criatividade oral e cocriação coletiva antes da escrita para reduzir a ansiedade motora e o déficit de foco.
-
+${blocoModelos}
 Responda estritamente em formato JSON válido e purificado (sem blocos markdown de código, apenas o objeto JSON puro), com a seguinte estrutura de chaves exatas:
 {
   "title": "Título caloroso da aula",
@@ -151,9 +527,9 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
 `;
 
   try {
-    // Chamada à API do Gemini usando o modelo gemini-2.5-flash com mecanismo de retentativas automáticas
+    // Chamada à API do Gemini (modelo conforme o plano do professor) com retentativas automáticas
     const response = await fetchWithRetry(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
@@ -207,6 +583,17 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
       }
     }
 
+    // Registrar consumo de crédito + custo real estimado (no-op em modo MVP)
+    const usage = data.usageMetadata || {};
+    await registrarUso({
+      userId: auth.userId,
+      tipo: 'plano',
+      creditos: CUSTOS.plano,
+      modelo: auth.plano.modelo_ia,
+      tokensInput: usage.promptTokenCount || 0,
+      tokensOutput: usage.candidatesTokenCount || 0,
+    });
+
     res.json(planJson);
 
   } catch (error) {
@@ -218,6 +605,41 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
   }
 });
 
+// Gera figuras educativas via modelo de imagem do Gemini. Best-effort:
+// devolve as imagens (data URI base64) que conseguir; ignora as que falharem.
+async function gerarImagensEducativas(prompts, apiKey) {
+  const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
+  const imagens = [];
+  for (const prompt of prompts) {
+    try {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseModalities: ['IMAGE'] },
+          }),
+        }
+      );
+      if (!resp.ok) {
+        console.warn('[Imagem] Geração falhou:', resp.status, await resp.text());
+        continue;
+      }
+      const data = await resp.json();
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const img = parts.find((p) => p.inlineData?.data);
+      if (img) {
+        imagens.push(`data:${img.inlineData.mimeType || 'image/png'};base64,${img.inlineData.data}`);
+      }
+    } catch (err) {
+      console.warn('[Imagem] Erro na geração:', err.message);
+    }
+  }
+  return imagens;
+}
+
 // Rota para Geração de Folha de Atividades para Alunos via Gemini
 app.post('/api/generate-activity', async (req, res) => {
   const {
@@ -227,8 +649,34 @@ app.post('/api/generate-activity', async (req, res) => {
     skillDesc,
     title,
     objetoConhecimento,
-    desenvolvimentoMetodologico
+    desenvolvimentoMetodologico,
+    comImagem,
   } = req.body;
+
+  // Autoriza primeiro com o custo de texto (1) para obter o plano do professor.
+  const auth = await autorizarGeracao(req, CUSTOS.atividade);
+  if (!auth.ok) {
+    return res.status(auth.status).json(auth.body);
+  }
+  const modelId = modeloGemini(auth.plano.modelo_ia);
+
+  // Atividade com figuras: só Profissional/Premium e custa 4 créditos.
+  let querImagem = Boolean(comImagem);
+  if (querImagem && !auth.plano.permite_imagem) {
+    return res.status(403).json({
+      error: 'imagem não permitida',
+      message: 'A geração de figuras está disponível apenas nos planos Profissional e Premium.',
+    });
+  }
+  if (querImagem) {
+    const liberado = await podeGerar(auth.userId, CUSTOS.atividade_imagem);
+    if (!liberado) {
+      return res.status(402).json({
+        error: 'sem créditos',
+        message: `A atividade com figuras custa ${CUSTOS.atividade_imagem} créditos e seu saldo não é suficiente.`,
+      });
+    }
+  }
 
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -280,9 +728,9 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
 `;
 
   try {
-    // Chamada com mecanismo de retentativas automáticas
+    // Chamada ao Gemini (modelo conforme o plano) com retentativas automáticas
     const response = await fetchWithRetry(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
@@ -323,6 +771,33 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
       activityJson = JSON.parse(sanitized);
     }
 
+    // Geração de figuras (best-effort) quando solicitado e permitido pelo plano.
+    let imagens = [];
+    if (querImagem) {
+      const promptsImagem = [
+        `Ilustração educativa infantil em preto e branco (line art para colorir), tema "${title}", componente ${subject}, adequada para ${grade} do Ensino Fundamental. Traços simples e limpos. NÃO inclua texto na imagem.`,
+        `Figura lúdica, colorida e amigável sobre "${objetoConhecimento || title}", para crianças de ${grade}, estilo material escolar. NÃO inclua texto na imagem.`,
+      ];
+      imagens = await gerarImagensEducativas(promptsImagem, apiKey);
+      if (imagens.length) activityJson.imagens = imagens;
+    }
+
+    // Cobra 4 créditos só se figuras foram realmente geradas; senão, 1 (texto).
+    const cobrouImagem = querImagem && imagens.length > 0;
+    const creditosCobrados = cobrouImagem ? CUSTOS.atividade_imagem : CUSTOS.atividade;
+
+    // Registrar consumo de crédito + custo real estimado (no-op em modo MVP)
+    const usage = data.usageMetadata || {};
+    await registrarUso({
+      userId: auth.userId,
+      tipo: cobrouImagem ? 'atividade_imagem' : 'atividade',
+      creditos: creditosCobrados,
+      modelo: auth.plano.modelo_ia,
+      tokensInput: usage.promptTokenCount || 0,
+      tokensOutput: usage.candidatesTokenCount || 0,
+      imagens: imagens.length,
+    });
+
     res.json(activityJson);
 
   } catch (error) {
@@ -337,7 +812,7 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
 // Inicializar o Servidor Express
 app.listen(PORT, () => {
   console.log(`================================================================`);
-  console.log(`🚀 SERVIDOR BACKEND DO EDUPLAN-SAAS ATIVO!`);
+  console.log(`🚀 SERVIDOR BACKEND DO PLANEJAAÍ ATIVO!`);
   console.log(`🔌 Porta: ${PORT}`);
   console.log(`🔗 Link de Status: http://localhost:${PORT}/api/status`);
   console.log(`================================================================`);

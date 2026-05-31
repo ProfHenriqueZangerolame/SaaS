@@ -1,0 +1,65 @@
+[
+  {
+    "subject": "Português",
+    "grade": "1º Ano",
+    "skillCode": "EF01LP02",
+    "titulo": "Construção do sistema alfabético / Estágios de escrita",
+    "conteudo_texto": "Objeto de Conhecimento: Construção do sistema alfabético / Estágios de escrita.\nDesenvolvimento Metodológico: Utilização de fichas estruturadas (Pirâmide). O aluno identifica a imagem, escreve a palavra, separa em sílabas e depois letra por letra de forma tátil e desplugada. O professor circula orientando e fornecendo pistas de apoio (Vygotsky).\nAvaliação: Análise do nível de escrita (sonda pedagógica processual): pré-silábico, silábico ou alfabético."
+  },
+  {
+    "subject": "Português",
+    "grade": "1º Ano",
+    "skillCode": "EF12LP01",
+    "titulo": "Decodificação / Fluência de Leitura",
+    "conteudo_texto": "Objeto de Conhecimento: Decodificação / Fluência de Leitura.\nDesenvolvimento Metodológico: Leitura individual e acolhedora de cards temáticos (letra/palavra/frase) e pequenos textos narrativos tradicionais. O professor escuta ativamente e registra discretamente o tipo de leitura (silabada ou fluida) de cada estudante.\nAvaliação: Avaliação formativa e processual da fluência, ritmo e compreensão de pequenos textos narrativos."
+  },
+  {
+    "subject": "Português",
+    "grade": "2º Ano",
+    "skillCode": "EF15LP05",
+    "titulo": "Escrita compartilhada / Planejamento de texto",
+    "conteudo_texto": "Objeto de Conhecimento: Escrita autônoma e compartilhada; planejamento de texto.\nDesenvolvimento Metodológico: Fábrica de Contos Inventados. O professor lê um conto autoral com personagens inexistentes e constrói coletivamente com a sala um banco de palavras (personagens, lugares e problemas). Os alunos produzem individualmente um texto curto seguindo um roteiro visual de parágrafos (início, meio e fim).\nAvaliação: Observação da organização lógica do pensamento narrativo e do uso do banco de palavras na produção individual.\nMaterial Adaptado (Educação Especial & TDAH): Organizador visual de parágrafos (roteiro numerado com guias físicas); cocriação oral coletiva antes da escrita para reduzir ansiedade motora e déficit de foco."
+  },
+  {
+    "subject": "Matemática",
+    "grade": "1º Ano",
+    "skillCode": "EF01MA01",
+    "titulo": "Contagem e construção do número",
+    "conteudo_texto": "Objeto de Conhecimento: Contagem de rotina, contagem ascendente e descendente; quantificação de elementos.\nDesenvolvimento Metodológico: Uso de material concreto (tampinhas, palitos, fichas). Os alunos agrupam e contam coleções, registram a quantidade com algarismos e comparam coleções (mais/menos/igual). O professor propõe situações-problema orais do cotidiano.\nAvaliação: Observação da correspondência um a um, da contagem estável e do registro numérico; sondagem individual com coleções de tamanhos variados."
+  },
+  {
+    "subject": "Matemática",
+    "grade": "3º Ano",
+    "skillCode": "EF03MA07",
+    "titulo": "Resolução de problemas de adição e subtração",
+    "conteudo_texto": "Objeto de Conhecimento: Problemas de adição e subtração (juntar, separar, comparar) com os significados de composição e transformação.\nDesenvolvimento Metodológico: Resolução de situações-problema contextualizadas em duplas, com registro pictórico e numérico. Socialização das estratégias no quadro, valorizando diferentes caminhos de cálculo (cálculo mental, decomposição, reta numérica).\nAvaliação: Análise dos registros e das estratégias; verificação da compreensão do enunciado mais do que apenas do resultado final."
+  },
+  {
+    "subject": "Ciências",
+    "grade": "1º Ano",
+    "skillCode": "EF01CI03",
+    "titulo": "Higiene do corpo e saúde",
+    "conteudo_texto": "Objeto de Conhecimento: Corpo humano; hábitos de higiene e cuidados com a saúde.\nDesenvolvimento Metodológico: Roda de conversa sobre hábitos diários (lavar as mãos, escovar os dentes). Observação de imagens e dramatização de situações cotidianas. Construção coletiva de um cartaz-rotina de higiene. O professor problematiza as razões de cada hábito (sentido, não memorização).\nAvaliação: Observação da participação e da capacidade de justificar os hábitos de higiene; registro por desenho legendado."
+  },
+  {
+    "subject": "Ciências",
+    "grade": "4º Ano",
+    "skillCode": "EF04CI02",
+    "titulo": "Misturas e transformações dos materiais",
+    "conteudo_texto": "Objeto de Conhecimento: Misturas; transformações reversíveis e não reversíveis.\nDesenvolvimento Metodológico: Experimentação investigativa em pequenos grupos (água + sal, água + óleo, aquecimento). Levantamento de hipóteses antes da observação, registro do antes/depois em tabela e conclusão coletiva. O professor media com perguntas investigativas, sem entregar a resposta.\nAvaliação: Avaliação processual do registro das hipóteses e observações; qualidade da argumentação ao classificar as transformações."
+  },
+  {
+    "subject": "Geografia",
+    "grade": "2º Ano",
+    "skillCode": "EF02GE01",
+    "titulo": "Convivência e lugares de vivência",
+    "conteudo_texto": "Objeto de Conhecimento: Convivência e interações entre pessoas nos lugares de vivência (casa, escola, bairro).\nDesenvolvimento Metodológico: Construção de mapa mental do trajeto casa-escola. Comparação dos diferentes lugares de vivência da turma e das regras de convivência de cada espaço. Atividade de desenho cartográfico simples com legenda.\nAvaliação: Observação da identificação dos elementos do lugar e das relações de convivência; análise do mapa produzido."
+  },
+  {
+    "subject": "História",
+    "grade": "3º Ano",
+    "skillCode": "EF03HI01",
+    "titulo": "Marcas da passagem do tempo na comunidade",
+    "conteudo_texto": "Objeto de Conhecimento: Marcas do tempo e mudanças/permanências na comunidade.\nDesenvolvimento Metodológico: Leitura de fotografias antigas e atuais do município. Entrevista (tarefa de casa) com um familiar mais velho sobre como era o bairro. Linha do tempo coletiva com mudanças e permanências identificadas pela turma.\nAvaliação: Análise da capacidade de distinguir mudanças e permanências e de situar fatos na linha do tempo; participação na socialização das entrevistas."
+  }
+]
