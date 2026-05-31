@@ -10,6 +10,8 @@ export const Auth = ({ onAuthSuccess }) => {
   const [role, setRole] = useState('teacher');
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [consent, setConsent] = useState(false);
+  const [legalModal, setLegalModal] = useState(null); // null | 'terms' | 'privacy'
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -25,12 +27,18 @@ export const Auth = ({ onAuthSuccess }) => {
       return;
     }
 
+    if (isSignUp && !consent) {
+      setErrorMsg('É necessário aceitar os Termos de Uso e a Política de Privacidade para criar a conta.');
+      setLoading(false);
+      return;
+    }
+
     try {
       if (isSignUp) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { full_name: fullName, role } },
+          options: { data: { full_name: fullName, role, lgpd_consent: true, lgpd_consent_at: new Date().toISOString() } },
         });
         if (error) throw error;
         if (data.session) {
@@ -63,6 +71,7 @@ export const Auth = ({ onAuthSuccess }) => {
     setIsSignUp(signUp);
     setErrorMsg('');
     setSuccessMsg('');
+    setConsent(false);
   };
 
   return (
@@ -328,6 +337,24 @@ export const Auth = ({ onAuthSuccess }) => {
               </div>
             )}
 
+            {/* Consentimento LGPD (sign-up only) */}
+            {isSignUp && (
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', fontSize: '12px', color: '#94a3b8', lineHeight: 1.5 }}>
+                <input
+                  type="checkbox"
+                  checked={consent}
+                  onChange={(e) => setConsent(e.target.checked)}
+                  style={{ marginTop: '2px', width: '16px', height: '16px', accentColor: '#6366f1', flexShrink: 0, cursor: 'pointer' }}
+                />
+                <span>
+                  Li e concordo com os{' '}
+                  <span onClick={(e) => { e.preventDefault(); setLegalModal('terms'); }} style={{ color: '#6366f1', cursor: 'pointer', fontWeight: 600 }}>Termos de Uso</span>{' '}
+                  e a{' '}
+                  <span onClick={(e) => { e.preventDefault(); setLegalModal('privacy'); }} style={{ color: '#6366f1', cursor: 'pointer', fontWeight: 600 }}>Política de Privacidade</span>, e autorizo o tratamento dos meus dados conforme a LGPD.
+                </span>
+              </label>
+            )}
+
             {/* Submit */}
             <button
               type="submit"
@@ -376,11 +403,76 @@ export const Auth = ({ onAuthSuccess }) => {
           {/* Footer note */}
           <p style={{ fontSize: '12px', color: '#475569', textAlign: 'center', marginTop: '24px', lineHeight: 1.6 }}>
             Ao entrar, você concorda com os nossos<br />
-            <span style={{ color: '#6366f1', cursor: 'pointer' }}>Termos de Uso</span> e <span style={{ color: '#6366f1', cursor: 'pointer' }}>Política de Privacidade</span>
+            <span onClick={() => setLegalModal('terms')} style={{ color: '#6366f1', cursor: 'pointer' }}>Termos de Uso</span> e <span onClick={() => setLegalModal('privacy')} style={{ color: '#6366f1', cursor: 'pointer' }}>Política de Privacidade</span>
           </p>
 
         </div>
       </div>
+
+      {/* ── MODAL LEGAL (Termos / Política) ── */}
+      {legalModal && (
+        <div
+          onClick={() => setLegalModal(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(3,2,10,0.78)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%', maxWidth: '560px', maxHeight: '82vh', overflowY: 'auto',
+              background: '#0e0c1e', border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '18px', padding: '32px 30px',
+              boxShadow: '0 30px 80px rgba(0,0,0,0.6)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h3 style={{ fontFamily: '"Outfit", sans-serif', fontSize: '20px', fontWeight: 800, margin: 0 }}>
+                {legalModal === 'terms' ? 'Termos de Uso' : 'Política de Privacidade'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setLegalModal(null)}
+                style={{ background: 'rgba(255,255,255,0.06)', border: 'none', color: '#94a3b8', width: '32px', height: '32px', borderRadius: '8px', cursor: 'pointer', fontSize: '16px' }}
+              >✕</button>
+            </div>
+
+            <div style={{ fontSize: '13.5px', color: '#cbd5e1', lineHeight: 1.7 }}>
+              {legalModal === 'terms' ? (
+                <>
+                  <p><strong>1. Objeto.</strong> O PlanejaAÍ é uma plataforma de geração de planos de aula e atividades pedagógicas alinhados à BNCC, com auxílio de inteligência artificial.</p>
+                  <p><strong>2. Conta.</strong> O usuário é responsável pela veracidade dos dados informados e pela guarda das suas credenciais de acesso.</p>
+                  <p><strong>3. Uso da IA.</strong> O conteúdo gerado é uma sugestão pedagógica e deve ser revisado pelo professor antes de qualquer uso oficial. O PlanejaAÍ não substitui o julgamento profissional do educador.</p>
+                  <p><strong>4. Créditos e planos.</strong> O acesso às funcionalidades pode ser limitado por créditos mensais conforme o plano contratado. Créditos não utilizados não acumulam para o mês seguinte, salvo indicação em contrário.</p>
+                  <p><strong>5. Pagamentos.</strong> As assinaturas são processadas via gateway de pagamento (Asaas). O cancelamento encerra a renovação, mantendo o acesso até o fim do ciclo vigente.</p>
+                  <p><strong>6. Propriedade.</strong> Os planos gerados pertencem ao usuário. A tecnologia e a marca PlanejaAÍ permanecem de propriedade da plataforma.</p>
+                </>
+              ) : (
+                <>
+                  <p>Esta Política descreve como o PlanejaAÍ trata seus dados pessoais, em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018 – LGPD).</p>
+                  <p><strong>Dados coletados.</strong> Nome, e-mail, função profissional e os conteúdos que você gera na plataforma.</p>
+                  <p><strong>Finalidade.</strong> Autenticação, geração de planos de aula, controle de créditos/assinatura e melhoria do serviço.</p>
+                  <p><strong>Base legal.</strong> Execução do contrato e consentimento, fornecido no momento do cadastro.</p>
+                  <p><strong>Compartilhamento.</strong> Dados podem ser processados por provedores de infraestrutura (Supabase), pagamento (Asaas) e IA (Google Gemini), estritamente para a operação do serviço.</p>
+                  <p><strong>Seus direitos.</strong> Você pode solicitar acesso, correção ou <strong>exclusão</strong> dos seus dados a qualquer momento pelo e-mail de suporte. A exclusão da conta remove os dados pessoais associados.</p>
+                  <p><strong>Retenção.</strong> Os dados são mantidos enquanto a conta estiver ativa ou conforme exigência legal.</p>
+                </>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setLegalModal(null)}
+              style={{
+                marginTop: '24px', width: '100%', padding: '13px', borderRadius: '10px', border: 'none',
+                background: 'linear-gradient(135deg,#6366f1,#a855f7)', color: '#fff', fontWeight: 700, fontSize: '14px', cursor: 'pointer', fontFamily: 'inherit',
+              }}
+            >Entendi</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
