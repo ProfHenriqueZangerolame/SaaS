@@ -1,6 +1,28 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { creditsEnabled, supabaseAdmin, getUserFromToken } from './supabaseAdmin.js';
+import {
+  CUSTOS,
+  modeloGemini,
+  getPlanoDoUsuario,
+  getSaldo,
+  podeGerar,
+  registrarUso,
+} from './creditos.js';
+import {
+  asaasEnabled,
+  criarOuObterCliente,
+  criarAssinatura,
+  primeiroPagamento,
+} from './asaas.js';
+
+// Catálogo estático de fallback (modo MVP, sem banco)
+const PLANOS_FALLBACK = [
+  { slug: 'basico', nome: 'Básico', preco_centavos: 1900, creditos_mensais: 20, modelo_ia: 'flash', permite_imagem: false, destaque: false },
+  { slug: 'profissional', nome: 'Profissional', preco_centavos: 3000, creditos_mensais: 60, modelo_ia: 'flash', permite_imagem: true, destaque: true },
+  { slug: 'premium', nome: 'Premium', preco_centavos: 5900, creditos_mensais: null, modelo_ia: 'pro', permite_imagem: true, destaque: false },
+];
 
 // Carregar variáveis de ambiente do arquivo .env
 dotenv.config();
@@ -18,9 +40,178 @@ app.use(express.json());
 app.get('/api/status', (req, res) => {
   res.json({
     status: 'online',
-    message: 'Backend do EduPlan-SaaS está operacional e seguro!',
-    iaConnected: !!process.env.GEMINI_API_KEY
+    message: 'Backend do PlanejaAÍ está operacional e seguro!',
+    iaConnected: !!process.env.GEMINI_API_KEY,
+    creditsEnabled
   });
+});
+
+/**
+ * Resolve o usuário autenticado e o plano dele, e valida se há crédito
+ * suficiente para `custo`. Em modo MVP livre (créditos desligados), libera tudo.
+ *
+ * Retorna { ok: true, userId, plano } quando pode prosseguir, ou
+ * { ok: false, status, body } com o erro HTTP a ser devolvido.
+ */
+async function autorizarGeracao(req, custo) {
+  // Modo MVP livre: sem controle, comportamento idêntico ao de hoje.
+  if (!creditsEnabled) {
+    return { ok: true, userId: null, plano: { modelo_ia: 'flash', permite_imagem: true } };
+  }
+
+  const user = await getUserFromToken(req.headers.authorization);
+  if (!user) {
+    return { ok: false, status: 401, body: { error: 'não autenticado', message: 'Faça login para gerar conteúdo.' } };
+  }
+
+  const plano = await getPlanoDoUsuario(user.id);
+  if (!plano) {
+    return {
+      ok: false,
+      status: 402,
+      body: { error: 'sem assinatura', message: 'Você ainda não tem um plano ativo. Escolha um plano para começar.' },
+    };
+  }
+
+  const liberado = await podeGerar(user.id, custo);
+  if (!liberado) {
+    return {
+      ok: false,
+      status: 402,
+      body: { error: 'sem créditos', message: 'Seus créditos do mês acabaram. Faça upgrade para continuar gerando.' },
+    };
+  }
+
+  return { ok: true, userId: user.id, plano };
+}
+
+// Saldo de créditos do mês atual do professor autenticado.
+app.get('/api/saldo', async (req, res) => {
+  try {
+    if (!creditsEnabled) {
+      return res.json({ ilimitado: true, creditos_mensais: null, consumidos: 0, restantes: 999999, modoMvp: true });
+    }
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+    const saldo = await getSaldo(user.id);
+    const plano = await getPlanoDoUsuario(user.id);
+    res.json({ ...saldo, plano: plano || null });
+  } catch (err) {
+    console.error('Erro ao consultar saldo:', err);
+    res.status(500).json({ error: 'erro ao consultar saldo' });
+  }
+});
+
+// Catálogo de planos disponíveis (público).
+app.get('/api/planos', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.json(PLANOS_FALLBACK);
+    const { data, error } = await supabaseAdmin
+      .from('planos')
+      .select('slug, nome, preco_centavos, creditos_mensais, modelo_ia, permite_imagem, destaque')
+      .eq('ativo', true)
+      .order('ordem');
+    if (error) throw error;
+    res.json(data?.length ? data : PLANOS_FALLBACK);
+  } catch (err) {
+    console.error('Erro ao listar planos:', err);
+    res.status(500).json({ error: 'erro ao listar planos' });
+  }
+});
+
+// Inicia a assinatura do professor no Asaas (ou em modo simulação).
+app.post('/api/assinatura', async (req, res) => {
+  try {
+    if (!creditsEnabled) {
+      return res.status(503).json({ error: 'indisponível', message: 'Controle de créditos desligado no servidor.' });
+    }
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { planoSlug, cpfCnpj } = req.body;
+    if (!planoSlug) return res.status(400).json({ error: 'plano não informado' });
+
+    const { data: plano } = await supabaseAdmin
+      .from('planos')
+      .select('*')
+      .eq('slug', planoSlug)
+      .maybeSingle();
+    if (!plano) return res.status(404).json({ error: 'plano inexistente' });
+
+    // Modo simulação: ativa direto, sem cobrar (útil para testes locais).
+    if (!asaasEnabled) {
+      await supabaseAdmin.from('assinaturas').upsert(
+        { user_id: user.id, plano_id: plano.id, status: 'ativa', data_inicio: new Date().toISOString(), atualizado_em: new Date().toISOString() },
+        { onConflict: 'user_id' }
+      );
+      return res.json({ simulado: true, message: `Plano ${plano.nome} ativado em modo simulação (Asaas desligado).` });
+    }
+
+    const cliente = await criarOuObterCliente({
+      nome: user.user_metadata?.full_name || user.email,
+      email: user.email,
+      cpfCnpj,
+      externalReference: user.id,
+    });
+    const assinatura = await criarAssinatura({
+      customerId: cliente.id,
+      valor: plano.preco_centavos / 100,
+      descricao: `PlanejaAÍ - ${plano.nome}`,
+      externalReference: user.id,
+    });
+    const pagamento = await primeiroPagamento(assinatura.id);
+
+    await supabaseAdmin.from('assinaturas').upsert(
+      {
+        user_id: user.id,
+        plano_id: plano.id,
+        status: 'pendente',
+        asaas_customer_id: cliente.id,
+        asaas_subscription_id: assinatura.id,
+        proximo_vencimento: assinatura.nextDueDate || null,
+        atualizado_em: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' }
+    );
+
+    res.json({ subscriptionId: assinatura.id, invoiceUrl: pagamento?.invoiceUrl || null });
+  } catch (err) {
+    console.error('Erro ao criar assinatura:', err);
+    res.status(500).json({ error: 'erro ao criar assinatura', message: err.message });
+  }
+});
+
+// Webhook do Asaas: libera/suspende o acesso conforme o pagamento.
+app.post('/api/webhooks/asaas', async (req, res) => {
+  try {
+    // Verificação opcional do token do webhook (configure em ASAAS_WEBHOOK_TOKEN).
+    const expected = process.env.ASAAS_WEBHOOK_TOKEN;
+    if (expected && req.headers['asaas-access-token'] !== expected) {
+      return res.sendStatus(401);
+    }
+    if (!creditsEnabled) return res.sendStatus(200);
+
+    const evento = req.body?.event;
+    const subId = req.body?.payment?.subscription;
+    if (!subId) return res.sendStatus(200);
+
+    let novoStatus = null;
+    if (['PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED'].includes(evento)) novoStatus = 'ativa';
+    else if (evento === 'PAYMENT_OVERDUE') novoStatus = 'suspensa';
+    else if (['PAYMENT_DELETED', 'PAYMENT_REFUNDED'].includes(evento)) novoStatus = 'cancelada';
+
+    if (novoStatus) {
+      await supabaseAdmin
+        .from('assinaturas')
+        .update({ status: novoStatus, atualizado_em: new Date().toISOString() })
+        .eq('asaas_subscription_id', subId);
+      console.log(`[Asaas] Assinatura ${subId} -> ${novoStatus} (${evento})`);
+    }
+    res.sendStatus(200); // sempre 200 para o Asaas não reenviar em loop
+  } catch (err) {
+    console.error('Erro no webhook Asaas:', err);
+    res.sendStatus(200);
+  }
 });
 
 // Função auxiliar de requisição robusta com retentativas automáticas e backoff exponencial
@@ -67,6 +258,13 @@ app.post('/api/generate-plan', async (req, res) => {
     turma,
     dataPeriodo
   } = req.body;
+
+  // Autorização de crédito (1 crédito por plano de aula). Em modo MVP, libera.
+  const auth = await autorizarGeracao(req, CUSTOS.plano);
+  if (!auth.ok) {
+    return res.status(auth.status).json(auth.body);
+  }
+  const modelId = modeloGemini(auth.plano.modelo_ia);
 
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -151,9 +349,9 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
 `;
 
   try {
-    // Chamada à API do Gemini usando o modelo gemini-2.5-flash com mecanismo de retentativas automáticas
+    // Chamada à API do Gemini (modelo conforme o plano do professor) com retentativas automáticas
     const response = await fetchWithRetry(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
@@ -207,6 +405,17 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
       }
     }
 
+    // Registrar consumo de crédito + custo real estimado (no-op em modo MVP)
+    const usage = data.usageMetadata || {};
+    await registrarUso({
+      userId: auth.userId,
+      tipo: 'plano',
+      creditos: CUSTOS.plano,
+      modelo: auth.plano.modelo_ia,
+      tokensInput: usage.promptTokenCount || 0,
+      tokensOutput: usage.candidatesTokenCount || 0,
+    });
+
     res.json(planJson);
 
   } catch (error) {
@@ -229,6 +438,15 @@ app.post('/api/generate-activity', async (req, res) => {
     objetoConhecimento,
     desenvolvimentoMetodologico
   } = req.body;
+
+  // Autorização de crédito (atividade em texto = 1 crédito).
+  // OBS: atividade COM imagem (4 créditos, só Pro/Premium) será ligada quando
+  // a geração de imagens for implementada.
+  const auth = await autorizarGeracao(req, CUSTOS.atividade);
+  if (!auth.ok) {
+    return res.status(auth.status).json(auth.body);
+  }
+  const modelId = modeloGemini(auth.plano.modelo_ia);
 
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -280,9 +498,9 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
 `;
 
   try {
-    // Chamada com mecanismo de retentativas automáticas
+    // Chamada ao Gemini (modelo conforme o plano) com retentativas automáticas
     const response = await fetchWithRetry(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
@@ -323,6 +541,17 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
       activityJson = JSON.parse(sanitized);
     }
 
+    // Registrar consumo de crédito + custo real estimado (no-op em modo MVP)
+    const usage = data.usageMetadata || {};
+    await registrarUso({
+      userId: auth.userId,
+      tipo: 'atividade',
+      creditos: CUSTOS.atividade,
+      modelo: auth.plano.modelo_ia,
+      tokensInput: usage.promptTokenCount || 0,
+      tokensOutput: usage.candidatesTokenCount || 0,
+    });
+
     res.json(activityJson);
 
   } catch (error) {
@@ -337,7 +566,7 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
 // Inicializar o Servidor Express
 app.listen(PORT, () => {
   console.log(`================================================================`);
-  console.log(`🚀 SERVIDOR BACKEND DO EDUPLAN-SAAS ATIVO!`);
+  console.log(`🚀 SERVIDOR BACKEND DO PLANEJAAÍ ATIVO!`);
   console.log(`🔌 Porta: ${PORT}`);
   console.log(`🔗 Link de Status: http://localhost:${PORT}/api/status`);
   console.log(`================================================================`);

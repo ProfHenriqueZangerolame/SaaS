@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react';
 import BNCC_SUGGESTIONS from '../data/bncc_skills.json';
+import { supabase } from '../supabaseClient';
+
+// Monta os headers com o token de login (quando houver) para o backend
+// identificar o professor e aplicar o controle de créditos.
+const authHeaders = async () => {
+  const { data } = await supabase.auth.getSession();
+  const token = data?.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
@@ -79,6 +88,73 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
   });
   const [errorMsg, setErrorMsg] = useState('');
   const [envWarning, setEnvWarning] = useState(false);
+  const [saldo, setSaldo] = useState(null); // saldo de créditos do mês (null = ainda carregando)
+
+  // Busca o saldo de créditos do professor no backend
+  const loadSaldo = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/saldo`, { headers: await authHeaders() });
+      if (res.ok) setSaldo(await res.json());
+    } catch {
+      /* silencioso: saldo é informativo */
+    }
+  };
+
+  useEffect(() => {
+    loadSaldo();
+  }, []);
+
+  // Texto curto do saldo para exibir no perfil/sidebar
+  const saldoLabel = () => {
+    if (!saldo) return 'Carregando...';
+    if (saldo.ilimitado) return saldo.modoMvp ? 'Modo livre ✨' : 'Créditos ilimitados ✨';
+    return `${saldo.restantes} de ${saldo.creditos_mensais} créditos`;
+  };
+
+  const semCredito = saldo && !saldo.ilimitado && saldo.restantes <= 0;
+
+  // Catálogo de planos para a aba de assinatura
+  const [planosDisponiveis, setPlanosDisponiveis] = useState([]);
+  const [assinando, setAssinando] = useState('');
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/api/planos`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setPlanosDisponiveis(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  // Formata centavos em reais (1900 -> "19,00")
+  const formatBRL = (cents) => (cents / 100).toFixed(2).replace('.', ',');
+
+  // Inicia a assinatura de um plano (abre o checkout do Asaas em nova aba).
+  const handleAssinar = async (slug) => {
+    setErrorMsg('');
+    setAssinando(slug);
+    try {
+      const cpfCnpj = window.prompt('Para emitir a cobrança, informe seu CPF (somente números):') || '';
+      const res = await fetch(`${API_BASE_URL}/api/assinatura`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+        body: JSON.stringify({ planoSlug: slug, cpfCnpj }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErrorMsg(data.message || 'Não foi possível iniciar a assinatura.');
+        return;
+      }
+      if (data.invoiceUrl) {
+        window.open(data.invoiceUrl, '_blank', 'noopener');
+      } else if (data.simulado) {
+        alert(`✅ ${data.message}`);
+      }
+      loadSaldo();
+    } catch {
+      setErrorMsg('Erro de conexão ao iniciar a assinatura.');
+    } finally {
+      setAssinando('');
+    }
+  };
 
   // Controle de Visualização da Sidebar
   const [showAdvancedMenu, setShowAdvancedMenu] = useState(() => {
@@ -353,6 +429,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(await authHeaders()),
         },
         body: JSON.stringify({
           subject,
@@ -406,6 +483,8 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
         roteiroDinamica: planJson.roteiroDinamica
       });
 
+      loadSaldo(); // atualiza o saldo de créditos após consumir 1 crédito
+
     } catch (err) {
       clearInterval(stepInterval);
       setLoading(false);
@@ -424,6 +503,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(await authHeaders()),
         },
         body: JSON.stringify({
           subject: generatedPlan.subject,
@@ -446,6 +526,8 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
 
       const activityJson = await response.json();
       setGeneratedActivity(activityJson);
+
+      loadSaldo(); // atualiza o saldo de créditos após consumir 1 crédito
 
     } catch (err) {
       setLoadingActivity(false);
@@ -734,7 +816,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                 Prof. {profile?.full_name ? profile.full_name.split(' ')[0] : nomeProfessor}
               </span>
               <span className="user-role" style={{ fontSize: '11px' }}>
-                {profile?.role === 'coordinator' ? 'Pedagogo / Gestor 🗂️' : 'Plano Premium ✨'}
+                {profile?.role === 'coordinator' ? 'Pedagogo / Gestor 🗂️' : saldoLabel()}
               </span>
             </div>
           </div>
@@ -766,6 +848,13 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
             >
               <span className="menu-icon">📂</span>
               <span>Meus Planos ({savedPlans.length})</span>
+            </div>
+            <div
+              className={`menu-item ${activeTab === 'planos' ? 'active' : ''}`}
+              onClick={() => setActiveTab('planos')}
+            >
+              <span className="menu-icon">💎</span>
+              <span>Planos &amp; Assinatura</span>
             </div>
           </nav>
 
@@ -915,6 +1004,22 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
           </div>
         )}
 
+        {/* Aviso de créditos esgotados */}
+        {semCredito && (
+          <div style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            borderLeft: '4px solid #f59e0b',
+            borderRadius: 'var(--radius-md)',
+            padding: '16px 20px',
+            marginBottom: '24px',
+            fontSize: '14px',
+            color: 'var(--text-primary)',
+            fontWeight: '600'
+          }}>
+            ⚠️ Seus créditos do mês acabaram. Faça upgrade do seu plano para continuar gerando planos e atividades.
+          </div>
+        )}
+
         <header className="header-section">
           <div className="header-title">
             {activeTab === 'home' && (
@@ -933,6 +1038,12 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
               <>
                 <h1>Fichas <span className="text-gradient">Salvas</span></h1>
                 <p>Gerencie, edite e exporte seus registros de plano de aula concluídos.</p>
+              </>
+            )}
+            {activeTab === 'planos' && (
+              <>
+                <h1>Planos &amp; <span className="text-gradient">Assinatura</span></h1>
+                <p>Escolha o plano ideal e gere quantos planos de aula precisar com inteligência artificial.</p>
               </>
             )}
             {activeTab === 'prefeitura' && (
@@ -1181,6 +1292,53 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
         )}
 
         {/* 1. ABA DO GERADOR DE PLANOS */}
+        {activeTab === 'planos' && (
+          <div className="fade-in">
+            {saldo && !saldo.ilimitado && saldo.creditos_mensais != null && (
+              <div className="form-card" style={{ padding: '20px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <span style={{ fontSize: '12px', fontWeight: '800', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Seu uso este mês</span>
+                  <div style={{ fontSize: '22px', fontWeight: '800', color: 'var(--primary)' }}>{saldo.consumidos} de {saldo.creditos_mensais} créditos</div>
+                </div>
+                <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Restam <strong>{saldo.restantes}</strong> créditos</div>
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '24px' }}>
+              {planosDisponiveis.map((p) => (
+                <div key={p.slug} className="form-card" style={{ padding: '28px', position: 'relative', border: p.destaque ? '2px solid var(--primary)' : '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  {p.destaque && (
+                    <span style={{ position: 'absolute', top: '-12px', left: '50%', transform: 'translateX(-50%)', background: 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)', color: '#fff', fontSize: '11px', fontWeight: '800', padding: '4px 14px', borderRadius: '50px', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>⭐ Mais Popular</span>
+                  )}
+                  <h3 style={{ fontSize: '20px', fontWeight: '800', margin: 0 }}>{p.nome}</h3>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>R$</span>
+                    <span style={{ fontSize: '34px', fontWeight: '900', color: 'var(--primary)' }}>{formatBRL(p.preco_centavos)}</span>
+                    <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>/mês</span>
+                  </div>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    <li>✅ {p.creditos_mensais == null ? 'Créditos ilimitados' : `${p.creditos_mensais} créditos por mês`}</li>
+                    <li>✅ IA {p.modelo_ia === 'pro' ? 'avançada (Pro)' : 'rápida (Flash)'}</li>
+                    <li>{p.permite_imagem ? '✅ Atividades com figuras' : '⛔ Sem atividades com figuras'}</li>
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => handleAssinar(p.slug)}
+                    disabled={assinando === p.slug}
+                    style={{ marginTop: 'auto', padding: '12px', borderRadius: '10px', border: 'none', background: p.destaque ? 'linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%)' : 'var(--primary)', color: '#fff', fontWeight: '800', fontSize: '14px', cursor: assinando === p.slug ? 'not-allowed' : 'pointer' }}
+                  >
+                    {assinando === p.slug ? 'Processando...' : 'Assinar este plano'}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <p style={{ marginTop: '20px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
+              Pagamento via Pix, boleto ou cartão pelo Asaas. Cancele quando quiser.
+            </p>
+          </div>
+        )}
+
         {activeTab === 'generator' && (
           <div>
             {!loading && !generatedPlan && (
