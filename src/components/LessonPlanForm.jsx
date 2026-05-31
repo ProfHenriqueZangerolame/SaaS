@@ -79,6 +79,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
   const [canvasView, setCanvasView] = useState('professor'); // 'professor' ou 'aluno'
   const [generatedActivity, setGeneratedActivity] = useState(null);
   const [loadingActivity, setLoadingActivity] = useState(false);
+  const [comImagem, setComImagem] = useState(false);
   const [showAccessibilityDicas, setShowAccessibilityDicas] = useState(true);
   const [showGabarito, setShowGabarito] = useState(false);
   const [borderTheme, setBorderTheme] = useState('classic'); // 'classic', 'space', 'nature', 'school'
@@ -115,6 +116,8 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
   };
 
   const semCredito = saldo && !saldo.ilimitado && saldo.restantes <= 0;
+  // Plano permite atividade com figuras? (Profissional/Premium ou modo MVP livre)
+  const permiteImagem = Boolean(saldo?.modoMvp || saldo?.plano?.permite_imagem);
 
   // Exclusão definitiva da conta + todos os dados (direito LGPD).
   const handleExcluirConta = async () => {
@@ -537,7 +540,8 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
           skillDesc: generatedPlan.skillDesc,
           title: generatedPlan.title,
           objetoConhecimento: generatedPlan.objetoConhecimento,
-          desenvolvimentoMetodologico: generatedPlan.desenvolvimentoMetodologico
+          desenvolvimentoMetodologico: generatedPlan.desenvolvimentoMetodologico,
+          comImagem: comImagem && permiteImagem,
         }),
       });
 
@@ -552,7 +556,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
       const activityJson = await response.json();
       setGeneratedActivity(activityJson);
 
-      loadSaldo(); // atualiza o saldo de créditos após consumir 1 crédito
+      loadSaldo(); // atualiza o saldo de créditos após consumir os créditos
 
     } catch (err) {
       setLoadingActivity(false);
@@ -2004,8 +2008,30 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                         <p style={{ color: 'var(--text-secondary)', maxWidth: '500px', margin: '0 auto 24px auto', lineHeight: '160%' }}>
                           Gere instantaneamente uma folha de exercícios prática e lúdica customizada com base nos dados do plano de aula gerado, pronta para imprimir e distribuir aos estudantes.
                         </p>
+
+                        {/* Opção: gerar com figuras (Profissional/Premium — 4 créditos) */}
+                        <label
+                          title={permiteImagem ? '' : 'Disponível nos planos Profissional e Premium'}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px',
+                            padding: '12px 18px', borderRadius: '12px',
+                            border: '1px solid var(--border-color)', background: 'var(--bg-app)',
+                            cursor: permiteImagem ? 'pointer' : 'not-allowed', opacity: permiteImagem ? 1 : 0.55,
+                            fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600,
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={comImagem && permiteImagem}
+                            disabled={!permiteImagem}
+                            onChange={(e) => setComImagem(e.target.checked)}
+                            style={{ width: '16px', height: '16px', accentColor: 'var(--primary)' }}
+                          />
+                          <span>🎨 Incluir figuras educativas na folha {permiteImagem ? <strong>(4 créditos)</strong> : '— Pro/Premium 🔒'}</span>
+                        </label>
+
                         <button type="button" className="btn-primary" style={{ width: 'auto' }} onClick={handleGenerateActivity}>
-                          <span>✨ Gerar Folha de Exercícios Dinâmica</span>
+                          <span>{comImagem && permiteImagem ? '✨ Gerar Folha com Figuras' : '✨ Gerar Folha de Exercícios Dinâmica'}</span>
                         </button>
                       </div>
                     )}
@@ -2285,10 +2311,24 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                                 </div>
                               )}
 
+                              {/* Figuras educativas geradas (Profissional/Premium) */}
+                              {generatedActivity.imagens && generatedActivity.imagens.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', justifyContent: 'center', marginBottom: '28px' }}>
+                                  {generatedActivity.imagens.map((src, idx) => (
+                                    <img
+                                      key={idx}
+                                      src={src}
+                                      alt={`Figura educativa ${idx + 1}`}
+                                      style={{ maxWidth: '320px', width: '100%', border: '1px solid #e2e8f0', borderRadius: '10px', pageBreakInside: 'avoid' }}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+
                               {/* Lista de Exercícios / Questões Dinâmicas */}
-                              <div style={{ 
-                                display: 'flex', 
-                                flexDirection: 'column', 
+                              <div style={{
+                                display: 'flex',
+                                flexDirection: 'column',
                                 gap: '35px',
                                 background: borderTheme === 'school' ? 'linear-gradient(#bfdbfe 1px, transparent 1px)' : 'none',
                                 backgroundSize: borderTheme === 'school' ? '100% 24px' : 'none',

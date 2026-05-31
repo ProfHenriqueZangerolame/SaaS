@@ -456,6 +456,41 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
   }
 });
 
+// Gera figuras educativas via modelo de imagem do Gemini. Best-effort:
+// devolve as imagens (data URI base64) que conseguir; ignora as que falharem.
+async function gerarImagensEducativas(prompts, apiKey) {
+  const model = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
+  const imagens = [];
+  for (const prompt of prompts) {
+    try {
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseModalities: ['IMAGE'] },
+          }),
+        }
+      );
+      if (!resp.ok) {
+        console.warn('[Imagem] Geração falhou:', resp.status, await resp.text());
+        continue;
+      }
+      const data = await resp.json();
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const img = parts.find((p) => p.inlineData?.data);
+      if (img) {
+        imagens.push(`data:${img.inlineData.mimeType || 'image/png'};base64,${img.inlineData.data}`);
+      }
+    } catch (err) {
+      console.warn('[Imagem] Erro na geração:', err.message);
+    }
+  }
+  return imagens;
+}
+
 // Rota para Geração de Folha de Atividades para Alunos via Gemini
 app.post('/api/generate-activity', async (req, res) => {
   const {
@@ -465,17 +500,34 @@ app.post('/api/generate-activity', async (req, res) => {
     skillDesc,
     title,
     objetoConhecimento,
-    desenvolvimentoMetodologico
+    desenvolvimentoMetodologico,
+    comImagem,
   } = req.body;
 
-  // Autorização de crédito (atividade em texto = 1 crédito).
-  // OBS: atividade COM imagem (4 créditos, só Pro/Premium) será ligada quando
-  // a geração de imagens for implementada.
+  // Autoriza primeiro com o custo de texto (1) para obter o plano do professor.
   const auth = await autorizarGeracao(req, CUSTOS.atividade);
   if (!auth.ok) {
     return res.status(auth.status).json(auth.body);
   }
   const modelId = modeloGemini(auth.plano.modelo_ia);
+
+  // Atividade com figuras: só Profissional/Premium e custa 4 créditos.
+  let querImagem = Boolean(comImagem);
+  if (querImagem && !auth.plano.permite_imagem) {
+    return res.status(403).json({
+      error: 'imagem não permitida',
+      message: 'A geração de figuras está disponível apenas nos planos Profissional e Premium.',
+    });
+  }
+  if (querImagem) {
+    const liberado = await podeGerar(auth.userId, CUSTOS.atividade_imagem);
+    if (!liberado) {
+      return res.status(402).json({
+        error: 'sem créditos',
+        message: `A atividade com figuras custa ${CUSTOS.atividade_imagem} créditos e seu saldo não é suficiente.`,
+      });
+    }
+  }
 
   const apiKey = process.env.GEMINI_API_KEY;
 
@@ -570,15 +622,31 @@ Responda estritamente em formato JSON válido e purificado (sem blocos markdown 
       activityJson = JSON.parse(sanitized);
     }
 
+    // Geração de figuras (best-effort) quando solicitado e permitido pelo plano.
+    let imagens = [];
+    if (querImagem) {
+      const promptsImagem = [
+        `Ilustração educativa infantil em preto e branco (line art para colorir), tema "${title}", componente ${subject}, adequada para ${grade} do Ensino Fundamental. Traços simples e limpos. NÃO inclua texto na imagem.`,
+        `Figura lúdica, colorida e amigável sobre "${objetoConhecimento || title}", para crianças de ${grade}, estilo material escolar. NÃO inclua texto na imagem.`,
+      ];
+      imagens = await gerarImagensEducativas(promptsImagem, apiKey);
+      if (imagens.length) activityJson.imagens = imagens;
+    }
+
+    // Cobra 4 créditos só se figuras foram realmente geradas; senão, 1 (texto).
+    const cobrouImagem = querImagem && imagens.length > 0;
+    const creditosCobrados = cobrouImagem ? CUSTOS.atividade_imagem : CUSTOS.atividade;
+
     // Registrar consumo de crédito + custo real estimado (no-op em modo MVP)
     const usage = data.usageMetadata || {};
     await registrarUso({
       userId: auth.userId,
-      tipo: 'atividade',
-      creditos: CUSTOS.atividade,
+      tipo: cobrouImagem ? 'atividade_imagem' : 'atividade',
+      creditos: creditosCobrados,
       modelo: auth.plano.modelo_ia,
       tokensInput: usage.promptTokenCount || 0,
       tokensOutput: usage.candidatesTokenCount || 0,
+      imagens: imagens.length,
     });
 
     res.json(activityJson);
