@@ -16,6 +16,7 @@ import {
   criarAssinatura,
   primeiroPagamento,
 } from './asaas.js';
+import { blocoHabilidadesBncc } from './ragBncc.js';
 
 // Catálogo estático de fallback (modo MVP, sem banco)
 const PLANOS_FALLBACK = [
@@ -291,6 +292,9 @@ app.post('/api/generate-plan', async (req, res) => {
   }
   const modelId = modeloGemini(auth.plano.modelo_ia);
 
+  // RAG: habilidades BNCC oficiais do ano/componente para aterrar o Agente 1.
+  const blocoBncc = await blocoHabilidadesBncc({ subject, grade });
+
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -322,7 +326,7 @@ DADOS DO CONTEXTO DA SALA:
 - Habilidade(s) Principal(is) da BNCC: ${skillCode} (Descrição: ${skillDesc})
 - Recursos Físicos Disponíveis: ${recursoNome}
 - Necessita de material adaptado / inclusão (Educação Especial & TDAH)? ${needsAdaptation ? 'Sim' : 'Não'}
-
+${blocoBncc}
 INSTRUÇÕES PEDAGÓGICAS CRUCIAIS PARA AS SEÇÕES (EXCLUSIVAS PARA AVALIAÇÃO DA PEDAGOGA):
 1. OBJETO DE CONHECIMENTO: Mapeie de forma concisa o(s) objeto(s) de conhecimento (conteúdo temático) oficiais da BNCC correspondentes à habilidade descrita. Seja direto.
 2. DESENVOLVIMENTO METODOLÓGICO: Forneça o passo a passo prático, técnico e cronológico de como a aula será aplicada (acolhimento, introdução, atividade principal baseada nos materiais, e encerramento). O tom deve ser estritamente formal, descritivo, objetivo e técnico. 
