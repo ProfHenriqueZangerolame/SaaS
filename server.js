@@ -275,6 +275,7 @@ app.post('/api/generate-plan', async (req, res) => {
     subject,
     grade,
     trimester,
+    duracaoAula,
     skillCode,
     skillDesc,
     resourceType,
@@ -327,13 +328,15 @@ DADOS DO CONTEXTO DA SALA:
 - Disciplina / Componente Curricular: ${subject}
 - Ano Escolar: ${grade}
 - Período: ${trimester}
+- Duração / Quantidade de aulas: ${duracaoAula || '1 aula (~50 min)'}
 - Habilidade(s) Principal(is) da BNCC: ${skillCode} (Descrição: ${skillDesc})
 - Recursos Físicos Disponíveis: ${recursoNome}
 - Necessita de material adaptado / inclusão (Educação Especial & TDAH)? ${needsAdaptation ? 'Sim' : 'Não'}
 ${blocoBncc}
 INSTRUÇÕES PEDAGÓGICAS CRUCIAIS PARA AS SEÇÕES (EXCLUSIVAS PARA AVALIAÇÃO DA PEDAGOGA):
 1. OBJETO DE CONHECIMENTO: Mapeie de forma concisa o(s) objeto(s) de conhecimento (conteúdo temático) oficiais da BNCC correspondentes à habilidade descrita. Seja direto.
-2. DESENVOLVIMENTO METODOLÓGICO: Forneça o passo a passo prático, técnico e cronológico de como a aula será aplicada (acolhimento, introdução, atividade principal baseada nos materiais, e encerramento). O tom deve ser estritamente formal, descritivo, objetivo e técnico. 
+2. DESENVOLVIMENTO METODOLÓGICO: Forneça o passo a passo prático, técnico e cronológico de como a aula será aplicada (acolhimento, introdução, atividade principal baseada nos materiais, e encerramento). O tom deve ser estritamente formal, descritivo, objetivo e técnico.
+   GESTÃO DO TEMPO (OBRIGATÓRIO): Dimensione rigorosamente o plano para a DURAÇÃO informada (${duracaoAula || '1 aula (~50 min)'}). Distribua tempos aproximados em minutos para cada etapa, somando o total disponível. Para 1 aula (~50 min), proponha uma sequência enxuta e factível em um único tempo; para 2 aulas geminadas (~100 min) ou 3 aulas (~150 min), organize a metodologia por blocos/aulas (ex: "1ª aula", "2ª aula"), com aprofundamento e atividades coerentes com o tempo total — NUNCA simplesmente repetindo o conteúdo. A carga de atividades deve ser proporcional ao tempo: não sobrecarregue 50 min nem deixe 100/150 min com pouco conteúdo.
    CRÍTICO: NÃO UTILIZE falas teatrais, diálogos fictícios, saudações lúdicas simuladas ou citações diretas entre aspas de como o professor conversa com a sala (como "raios de sol", "queridos pequenos exploradores", "olhem para mim", "peguem o caderno mais lindo da sala"). O texto deve descrever de forma impessoal e clara as ações práticas do professor e dos alunos, usando verbos no infinitivo ou em terceira pessoa (ex: "Receber os alunos e organizar a sala em formato de U", "Apresentar a proposta no quadro...", "Orientar a formação de duplas e distribuir os cartões..."). Descreva objetivamente o que acontece e o que será de fato aplicado na prática escolar de verdade.
 3. AVALIAÇÃO: Descreva os critérios de avaliação formativa e processual de forma técnica (métodos de observação direta, registro do portfólio ou sondas de escrita aplicadas).
 4. MATERIAL ADAPTADO PARA EDUCAÇÃO ESPECIAL E TDAH: 

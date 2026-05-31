@@ -65,6 +65,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
     return '1º Ano';
   });
   const [trimester, setTrimester] = useState('2º Trimestre');
+  const [duracaoAula, setDuracaoAula] = useState('1 aula (~50 min)');
   const [resource, setResource] = useState('analog');
   const [needsAdaptation, setNeedsAdaptation] = useState(true);
   const [selectedSkill, setSelectedSkill] = useState('AUTO_DETECT');
@@ -463,6 +464,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
           subject,
           grade,
           trimester,
+          duracaoAula,
           skillCode: finalSkillCode,
           skillDesc: finalSkillDesc,
           resourceType: resource,
@@ -496,6 +498,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
         subject,
         grade,
         trimester,
+        duracaoAula,
         skillCode: planJson.skillCode || (finalSkillCode === 'AUTO_DETECT' ? 'Personalizado' : finalSkillCode),
         skillDesc: planJson.skillDesc || finalSkillDesc,
         resourceType: resource,
@@ -1529,6 +1532,16 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                     </select>
                   </div>
 
+                  {/* Duração / Quantidade de aulas */}
+                  <div className="form-group">
+                    <label>⏱️ Duração da Aula</label>
+                    <select value={duracaoAula} onChange={(e) => setDuracaoAula(e.target.value)}>
+                      <option value="1 aula (~50 min)">1 aula (~50 min)</option>
+                      <option value="2 aulas geminadas (~100 min)">2 aulas geminadas (~100 min)</option>
+                      <option value="3 aulas (~150 min)">3 aulas (~150 min)</option>
+                    </select>
+                  </div>
+
                   {/* Habilidade da BNCC */}
                   <div className="form-group form-group-full">
                     <label>🎯 Habilidade da BNCC ou Tema da Aula</label>
@@ -1851,6 +1864,9 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                         </div>
                         <div style={{ padding: '4px 0' }}>
                           <strong>Trimestre:</strong> {generatedPlan.trimester}
+                        </div>
+                        <div style={{ padding: '4px 0' }}>
+                          <strong>Duração:</strong> {generatedPlan.duracaoAula || '1 aula (~50 min)'}
                         </div>
                         <div style={{ padding: '4px 0', gridColumn: 'span 2' }}>
                           <strong>Data/Período:</strong> {generatedPlan.dataPeriodo}
