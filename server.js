@@ -207,6 +207,93 @@ app.delete('/api/conta', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------
+// Planos de aula salvos pelo professor (persistência em planos_gerados).
+// Só ativo com créditos ligados (service role). Em modo MVP o frontend
+// continua usando o localStorage.
+// ---------------------------------------------------------------------
+
+// Lista os planos salvos do professor.
+app.get('/api/meus-planos', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { data, error } = await supabaseAdmin
+      .from('planos_gerados')
+      .select('id, conteudo_json, criado_em')
+      .eq('user_id', user.id)
+      .order('criado_em', { ascending: false });
+    if (error) throw error;
+
+    // Devolve o objeto do plano com o id do banco anexado.
+    res.json((data || []).map((r) => ({ _dbId: r.id, _criadoEm: r.criado_em, ...r.conteudo_json })));
+  } catch (err) {
+    console.error('Erro ao listar planos salvos:', err);
+    res.status(500).json({ error: 'erro ao listar planos' });
+  }
+});
+
+// Salva um plano de aula gerado.
+app.post('/api/meus-planos', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const plano = req.body?.plano;
+    if (!plano || typeof plano !== 'object') return res.status(400).json({ error: 'plano inválido' });
+
+    const { data, error } = await supabaseAdmin
+      .from('planos_gerados')
+      .insert({
+        user_id: user.id,
+        subject: plano.subject || null,
+        grade: plano.grade || null,
+        trimester: plano.trimester || null,
+        skill_code: plano.skillCode || null,
+        skill_desc: plano.skillDesc || null,
+        resource_type: plano.resourceType || null,
+        unidade_ensino: plano.unidadeEnsino || null,
+        nome_professor: plano.nomeProfessor || null,
+        turma: plano.turma || null,
+        data_periodo: plano.dataPeriodo || null,
+        conteudo_json: plano,
+        modelo_ia: plano.modelo_ia || 'flash',
+      })
+      .select('id, criado_em')
+      .single();
+    if (error) throw error;
+
+    res.json({ id: data.id, criado_em: data.criado_em });
+  } catch (err) {
+    console.error('Erro ao salvar plano:', err);
+    res.status(500).json({ error: 'erro ao salvar plano', message: err.message });
+  }
+});
+
+// Exclui um plano salvo do professor.
+app.delete('/api/meus-planos/:id', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { error } = await supabaseAdmin
+      .from('planos_gerados')
+      .delete()
+      .eq('id', req.params.id)
+      .eq('user_id', user.id);
+    if (error) throw error;
+
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('Erro ao excluir plano:', err);
+    res.status(500).json({ error: 'erro ao excluir plano' });
+  }
+});
+
 // Webhook do Asaas: libera/suspende o acesso conforme o pagamento.
 app.post('/api/webhooks/asaas', async (req, res) => {
   try {

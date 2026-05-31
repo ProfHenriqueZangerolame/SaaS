@@ -632,11 +632,64 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
     URL.revokeObjectURL(url);
   };
 
-  const savePlan = () => {
-    if (generatedPlan) {
-      setSavedPlans([generatedPlan, ...savedPlans]);
-      alert('🏆 Plano salvo com sucesso no banco de dados do PlanejaAÍ!');
+  // Persistência ativa no servidor quando há controle de créditos (não-MVP).
+  const usaServidor = Boolean(saldo && !saldo.modoMvp);
+
+  // Carrega os planos salvos do servidor (quando logado com créditos ativos).
+  const loadMeusPlanos = async () => {
+    if (!usaServidor) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/meus-planos`, { headers: await authHeaders() });
+      if (res.ok) setSavedPlans(await res.json());
+    } catch {
+      /* silencioso: cai no cache local */
     }
+  };
+
+  // Quando o saldo confirma modo não-MVP, sincroniza a lista com o servidor.
+  useEffect(() => {
+    if (usaServidor) loadMeusPlanos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [usaServidor]);
+
+  const savePlan = async () => {
+    if (!generatedPlan) return;
+    if (usaServidor) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/meus-planos`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+          body: JSON.stringify({ plano: generatedPlan }),
+        });
+        if (!res.ok) throw new Error('falha ao salvar');
+        const { id, criado_em } = await res.json();
+        setSavedPlans([{ _dbId: id, _criadoEm: criado_em, ...generatedPlan }, ...savedPlans]);
+        alert('🏆 Plano salvo com sucesso na sua conta!');
+      } catch {
+        alert('⚠️ Não foi possível salvar o plano no servidor. Tente novamente.');
+      }
+    } else {
+      setSavedPlans([generatedPlan, ...savedPlans]);
+      alert('🏆 Plano salvo localmente neste navegador!');
+    }
+  };
+
+  // Exclui um plano salvo (servidor quando ativo; senão, só local).
+  const handleDeletePlano = async (plan, idx) => {
+    if (!confirm('Excluir este plano salvo?')) return;
+    if (usaServidor && plan._dbId) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/meus-planos/${plan._dbId}`, {
+          method: 'DELETE',
+          headers: await authHeaders(),
+        });
+        if (!res.ok) throw new Error('falha');
+      } catch {
+        alert('⚠️ Não foi possível excluir no servidor.');
+        return;
+      }
+    }
+    setSavedPlans(savedPlans.filter((_, i) => i !== idx));
   };
 
   // === AUXILIARES DO PAINEL DA PREFEITURA ===
@@ -2491,9 +2544,18 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                         <span className="plan-badge badge-skill">{plan.skillCode}</span>
                       </div>
                     </div>
-                    <button className="btn-secondary" onClick={() => setGeneratedPlan(plan)}>
-                      <span>🔍 Abrir Plano</span>
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button className="btn-secondary" onClick={() => setGeneratedPlan(plan)}>
+                        <span>🔍 Abrir Plano</span>
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        style={{ backgroundColor: 'rgba(239, 68, 68, 0.08)', color: '#fca5a5', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                        onClick={() => handleDeletePlano(plan, idx)}
+                      >
+                        <span>🗑️</span>
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
