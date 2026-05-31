@@ -17,6 +17,14 @@ export const Auth = ({ onAuthSuccess }) => {
     setErrorMsg('');
     setSuccessMsg('');
 
+    // Login local de teste — bypass Supabase
+    if (!isSignUp && email === 'admin@admin' && (password === 'admin' || password === 'dmin')) {
+      const mockUser = { id: 'admin-test-local', email: 'admin@admin', role: 'admin' };
+      const mockSession = { user: mockUser, access_token: 'mock-local-token', __isLocal: true };
+      onAuthSuccess(mockSession, mockUser);
+      return;
+    }
+
     try {
       if (isSignUp) {
         // Fluxo de Cadastro
