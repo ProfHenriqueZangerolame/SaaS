@@ -207,6 +207,28 @@ app.delete('/api/conta', async (req, res) => {
   }
 });
 
+// Histórico de consumo de créditos do professor (últimos lançamentos).
+app.get('/api/uso', async (req, res) => {
+  try {
+    if (!creditsEnabled) return res.status(503).json({ error: 'indisponível', modoMvp: true });
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { data, error } = await supabaseAdmin
+      .from('usage_logs')
+      .select('tipo, creditos, modelo_ia, imagens_geradas, criado_em')
+      .eq('user_id', user.id)
+      .order('criado_em', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+
+    res.json(data || []);
+  } catch (err) {
+    console.error('Erro ao listar uso:', err);
+    res.status(500).json({ error: 'erro ao listar uso' });
+  }
+});
+
 // ---------------------------------------------------------------------
 // Planos de aula salvos pelo professor (persistência em planos_gerados).
 // Só ativo com créditos ligados (service role). Em modo MVP o frontend

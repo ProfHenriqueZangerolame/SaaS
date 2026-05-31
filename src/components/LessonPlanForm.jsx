@@ -94,6 +94,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
   const [showDeleteConta, setShowDeleteConta] = useState(false);
   const [deletingConta, setDeletingConta] = useState(false);
   const [deleteContaErro, setDeleteContaErro] = useState('');
+  const [historicoUso, setHistoricoUso] = useState([]);
 
   // Busca o saldo de créditos do professor no backend
   const loadSaldo = async () => {
@@ -515,6 +516,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
       });
 
       loadSaldo(); // atualiza o saldo de créditos após consumir 1 crédito
+      loadUso();
 
     } catch (err) {
       clearInterval(stepInterval);
@@ -560,6 +562,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
       setGeneratedActivity(activityJson);
 
       loadSaldo(); // atualiza o saldo de créditos após consumir os créditos
+      loadUso();
 
     } catch (err) {
       setLoadingActivity(false);
@@ -646,9 +649,20 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
     }
   };
 
-  // Quando o saldo confirma modo não-MVP, sincroniza a lista com o servidor.
+  // Carrega o histórico de consumo de créditos (servidor).
+  const loadUso = async () => {
+    if (!usaServidor) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/uso`, { headers: await authHeaders() });
+      if (res.ok) setHistoricoUso(await res.json());
+    } catch {
+      /* silencioso */
+    }
+  };
+
+  // Quando o saldo confirma modo não-MVP, sincroniza com o servidor.
   useEffect(() => {
-    if (usaServidor) loadMeusPlanos();
+    if (usaServidor) { loadMeusPlanos(); loadUso(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [usaServidor]);
 
@@ -1421,6 +1435,27 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                   <div style={{ fontSize: '22px', fontWeight: '800', color: 'var(--primary)' }}>{saldo.consumidos} de {saldo.creditos_mensais} créditos</div>
                 </div>
                 <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Restam <strong>{saldo.restantes}</strong> créditos</div>
+              </div>
+            )}
+
+            {/* Histórico de consumo de créditos */}
+            {usaServidor && historicoUso.length > 0 && (
+              <div className="form-card" style={{ padding: '20px', marginBottom: '24px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: '800', margin: '0 0 14px 0' }}>📊 Histórico de Uso (últimos {historicoUso.length})</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+                  {historicoUso.map((u, i) => {
+                    const tipoLabel = u.tipo === 'plano' ? '📝 Plano de aula'
+                      : u.tipo === 'atividade_imagem' ? '🎨 Atividade com figuras'
+                      : '✏️ Atividade';
+                    const data = u.criado_em ? new Date(u.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '13px', padding: '8px 12px', borderRadius: '8px', background: 'var(--bg-app)' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>{tipoLabel} <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>· {u.modelo_ia === 'pro' ? 'Pro' : 'Flash'} · {data}</span></span>
+                        <span style={{ fontWeight: '800', color: 'var(--primary)' }}>-{u.creditos} cr</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
