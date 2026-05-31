@@ -560,7 +560,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
           xmlns:w='urn:schemas-microsoft-com:office:word' 
           xmlns='http://www.w3.org/TR/REC-html40'>
           <head>
-            <title>EduPlan Export</title>
+            <title>PlanejaAÍ Export</title>
             <meta charset='utf-8'>
             <style>
               body { font-family: Arial, sans-serif; font-size: 11pt; color: #000000; }
@@ -603,7 +603,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
   const savePlan = () => {
     if (generatedPlan) {
       setSavedPlans([generatedPlan, ...savedPlans]);
-      alert('🏆 Plano salvo com sucesso no banco de dados do EduPlan!');
+      alert('🏆 Plano salvo com sucesso no banco de dados do PlanejaAÍ!');
     }
   };
 
@@ -802,8 +802,8 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
       <aside className="sidebar">
         <div>
           <div className="brand-section">
-            <div className="brand-logo">EP</div>
-            <div className="brand-name">EduPlan <span className="text-gradient">SaaS</span></div>
+            <div className="brand-logo">PÁ</div>
+            <div className="brand-name">Planeja<span className="text-gradient">AÍ</span></div>
           </div>
 
           {/* Perfil de Usuário Logado */}
@@ -950,7 +950,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
           )}
 
           <div style={{ fontSize: '11px', color: 'var(--text-muted)', textAlign: 'center' }}>
-            EduPlan v1.0.0 &copy; 2026
+            PlanejaAÍ v1.0.0 &copy; 2026
           </div>
         </div>
       </aside>
@@ -974,7 +974,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
               ⚠️ Configuração do Servidor Pendente!
             </h3>
             <p style={{ margin: '0 0 16px 0' }}>
-              O backend do EduPlan-SaaS foi contactado com sucesso, mas a chave <strong>`GEMINI_API_KEY`</strong> no arquivo <strong>`.env`</strong> na raiz do projeto ainda está com o valor padrão!
+              O backend do PlanejaAÍ foi contactado com sucesso, mas a chave <strong>`GEMINI_API_KEY`</strong> no arquivo <strong>`.env`</strong> na raiz do projeto ainda está com o valor padrão!
             </p>
             <ol style={{ margin: '0 0 16px 0', paddingLeft: '20px' }}>
               <li style={{ marginBottom: '6px' }}>Abra o arquivo <strong>`.env`</strong> localizado na raiz do projeto.</li>
@@ -1025,7 +1025,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
             {activeTab === 'home' && (
               <>
                 <h1>Olá, Prof. <span className="text-gradient">{nomeProfessor}</span>! 👋</h1>
-                <p>Bem-vindo ao portal EduPlan. O que vamos planejar de incrível hoje?</p>
+                <p>Bem-vindo ao portal PlanejaAÍ. O que vamos planejar de incrível hoje?</p>
               </>
             )}
             {activeTab === 'generator' && (
@@ -1900,7 +1900,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                       color: 'var(--text-secondary)',
                       fontWeight: '700'
                     }}>
-                      <span>EduPlan SaaS - Facilitando o engajamento lúdico em sala! 🌟</span>
+                      <span>PlanejaAÍ - Facilitando o engajamento lúdico em sala! 🌟</span>
                       <span>Professor: {generatedPlan.nomeProfessor}</span>
                     </div>
 
@@ -2304,7 +2304,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                                 fontSize: '11px',
                                 fontWeight: 'bold'
                               }}>
-                                <span>EduPlan SaaS - Atividade Concluída! 🏆</span>
+                                <span>PlanejaAÍ - Atividade Concluída! 🏆</span>
                                 <div style={{ display: 'flex', gap: '10px', width: '50%' }}>
                                   <span>VISTO DO PROFESSOR:</span>
                                   <span style={{ flexGrow: 1, borderBottom: '1px solid #000' }}></span>
@@ -2473,7 +2473,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                     </div>
 
                     <div className="school-bar-container">
-                      <div className="school-bar-label">Uso do EduPlan nos planejamentos BNCC</div>
+                      <div className="school-bar-label">Uso do PlanejaAÍ nos planejamentos BNCC</div>
                       <div className="school-progress-outer">
                         <div className="school-progress-inner" style={{ width: `${school.adoption}%` }}></div>
                       </div>
@@ -2840,7 +2840,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                         <strong>Oficinas de Segurança da Informação (LGPD):</strong> Implementar oficinas rápidas sobre ética de uso seguro de dados nas escolas, visando sanar a brecha crítica identificada em Cultura Digital.
                       </li>
                       <li>
-                        <strong>Adoção Emergencial do EduPlan SaaS:</strong> Utilizar o banco com as 103 habilidades computacionais mescladas e o gerador de planos por inteligência artificial para que os professores consigam dar aulas de qualidade imediatamente, sem depender de criar apostilas próprias do zero.
+                        <strong>Adoção Emergencial do PlanejaAÍ:</strong> Utilizar o banco com as 103 habilidades computacionais mescladas e o gerador de planos por inteligência artificial para que os professores consigam dar aulas de qualidade imediatamente, sem depender de criar apostilas próprias do zero.
                       </li>
                     </ol>
                   </div>
@@ -3016,7 +3016,7 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
                     <div className="cert-signatures">
                       <div className="cert-sign-line">
                         Coordenação Pedagógica Municipal
-                        <div className="cert-sign-title">EduPlan SaaS &amp; Gestão Pública</div>
+                        <div className="cert-sign-title">PlanejaAÍ &amp; Gestão Pública</div>
                       </div>
                       <div className="cert-sign-line">
                         Secretário(a) Municipal de Educação

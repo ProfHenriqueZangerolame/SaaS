@@ -110,15 +110,15 @@ export const Auth = ({ onAuthSuccess }) => {
             boxShadow: '0 8px 24px rgba(99, 102, 241, 0.3)',
             marginBottom: '16px'
           }}>
-            EP
+            PÁ
           </div>
           <h2 style={{ fontSize: '26px', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
-            EduPlan <span style={{
+            Planeja<span style={{
               background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               fontWeight: '900'
-            }}>SaaS</span>
+            }}>AÍ</span>
           </h2>
           <p style={{ fontSize: '13px', color: '#94a3b8', marginTop: '8px', lineHeight: '140%', marginBottom: '12px' }}>
             Plataforma Inteligente de Planejamento de Aula Oficial BNCC
@@ -342,7 +342,7 @@ export const Auth = ({ onAuthSuccess }) => {
             {loading ? (
               <span className="spinner" style={{ width: '16px', height: '16px', margin: 0, borderWidth: '2px' }}></span>
             ) : (
-              <span>{isSignUp ? 'Criar Minha Conta Pedagógica' : 'Entrar no Painel do EduPlan'}</span>
+              <span>{isSignUp ? 'Criar Minha Conta Pedagógica' : 'Entrar no Painel do PlanejaAÍ'}</span>
             )}
           </button>
 

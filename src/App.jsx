@@ -96,7 +96,7 @@ function App() {
       }}>
         <div className="spinner"></div>
         <p style={{ marginTop: '16px', fontSize: '14px', color: '#94a3b8' }}>
-          Carregando portal do EduPlan...
+          Carregando portal do PlanejaAÍ...
         </p>
       </div>
     );
@@ -125,7 +125,7 @@ function App() {
     );
   }
 
-  // 3. Caso autenticado e com perfil configurado: Abrir o Painel do EduPlan
+  // 3. Caso autenticado e com perfil configurado: Abrir o Painel do PlanejaAÍ
   return (
     <LessonPlanForm 
       user={user} 
