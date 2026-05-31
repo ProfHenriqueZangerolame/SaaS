@@ -181,6 +181,31 @@ app.post('/api/assinatura', async (req, res) => {
   }
 });
 
+// Exclusão definitiva da conta + dados (direito de exclusão da LGPD).
+// Apagar o usuário em auth.users cascateia para assinaturas, planos_gerados,
+// atividades_geradas, usage_logs e profiles (FKs on delete cascade).
+app.delete('/api/conta', async (req, res) => {
+  try {
+    if (!creditsEnabled) {
+      return res.status(503).json({
+        error: 'indisponível',
+        message: 'Exclusão de conta requer a service role do Supabase configurada no servidor.',
+      });
+    }
+    const user = await getUserFromToken(req.headers.authorization);
+    if (!user) return res.status(401).json({ error: 'não autenticado' });
+
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(user.id);
+    if (error) throw error;
+
+    console.log(`[LGPD] Conta ${user.id} excluída a pedido do titular.`);
+    res.json({ deleted: true });
+  } catch (err) {
+    console.error('Erro ao excluir conta:', err);
+    res.status(500).json({ error: 'erro ao excluir conta', message: err.message });
+  }
+});
+
 // Webhook do Asaas: libera/suspende o acesso conforme o pagamento.
 app.post('/api/webhooks/asaas', async (req, res) => {
   try {

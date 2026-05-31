@@ -89,6 +89,9 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
   const [errorMsg, setErrorMsg] = useState('');
   const [envWarning, setEnvWarning] = useState(false);
   const [saldo, setSaldo] = useState(null); // saldo de créditos do mês (null = ainda carregando)
+  const [showDeleteConta, setShowDeleteConta] = useState(false);
+  const [deletingConta, setDeletingConta] = useState(false);
+  const [deleteContaErro, setDeleteContaErro] = useState('');
 
   // Busca o saldo de créditos do professor no backend
   const loadSaldo = async () => {
@@ -112,6 +115,28 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
   };
 
   const semCredito = saldo && !saldo.ilimitado && saldo.restantes <= 0;
+
+  // Exclusão definitiva da conta + todos os dados (direito LGPD).
+  const handleExcluirConta = async () => {
+    setDeletingConta(true);
+    setDeleteContaErro('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/conta`, {
+        method: 'DELETE',
+        headers: await authHeaders(),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || 'Não foi possível excluir a conta agora.');
+      }
+      // Conta apagada: encerra a sessão e volta para o login.
+      await supabase.auth.signOut().catch(() => {});
+      if (onLogout) onLogout();
+    } catch (err) {
+      setDeleteContaErro(err.message || 'Erro ao excluir a conta.');
+      setDeletingConta(false);
+    }
+  };
 
   // Catálogo de planos para a aba de assinatura
   const [planosDisponiveis, setPlanosDisponiveis] = useState([]);
@@ -1371,6 +1396,21 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
             <p style={{ marginTop: '20px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center' }}>
               Pagamento via Pix, boleto ou cartão pelo Asaas. Cancele quando quiser.
             </p>
+
+            {/* Conta & Privacidade (LGPD) */}
+            <div className="form-card" style={{ marginTop: '40px', padding: '24px', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: '800', margin: '0 0 6px 0', color: '#fca5a5' }}>🔒 Conta & Privacidade (LGPD)</h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px 0', lineHeight: 1.6 }}>
+                Você pode excluir permanentemente sua conta e todos os seus dados (planos, atividades, assinatura e histórico de uso). Esta ação é irreversível e atende ao seu direito de exclusão previsto na LGPD.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setDeleteContaErro(''); setShowDeleteConta(true); }}
+                style={{ padding: '11px 18px', borderRadius: '10px', border: '1px solid rgba(239, 68, 68, 0.4)', background: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5', fontWeight: '700', fontSize: '13px', cursor: 'pointer' }}
+              >
+                🗑️ Excluir minha conta e meus dados
+              </button>
+            </div>
           </div>
         )}
 
@@ -3291,6 +3331,43 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
           </div>
         )}
       </main>
+
+      {/* MODAL DE EXCLUSÃO DE CONTA (LGPD) */}
+      {showDeleteConta && (
+        <div
+          onClick={() => !deletingConta && setShowDeleteConta(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(3,2,10,0.78)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ width: '100%', maxWidth: '460px', background: 'var(--bg-card)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '16px', padding: '28px', boxShadow: '0 30px 80px rgba(0,0,0,0.6)' }}
+          >
+            <h3 style={{ fontSize: '18px', fontWeight: '800', margin: '0 0 10px 0', color: '#fca5a5' }}>🗑️ Excluir minha conta</h3>
+            <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', lineHeight: 1.6, margin: '0 0 18px 0' }}>
+              Esta ação é <strong>permanente e irreversível</strong>. Todos os seus planos, atividades, assinatura e histórico serão apagados definitivamente. Deseja continuar?
+            </p>
+            {deleteContaErro && (
+              <div style={{ background: 'rgba(239,68,68,0.1)', borderLeft: '4px solid #ef4444', color: '#fca5a5', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' }}>
+                ⚠️ {deleteContaErro}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConta(false)}
+                disabled={deletingConta}
+                style={{ flex: 1, padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-primary)', fontWeight: '700', fontSize: '13px', cursor: deletingConta ? 'not-allowed' : 'pointer' }}
+              >Cancelar</button>
+              <button
+                type="button"
+                onClick={handleExcluirConta}
+                disabled={deletingConta}
+                style={{ flex: 1, padding: '12px', borderRadius: '10px', border: 'none', background: '#ef4444', color: '#fff', fontWeight: '800', fontSize: '13px', cursor: deletingConta ? 'not-allowed' : 'pointer' }}
+              >{deletingConta ? 'Excluindo...' : 'Sim, excluir tudo'}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
