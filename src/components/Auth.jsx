@@ -104,22 +104,18 @@ export const Auth = ({ onAuthSuccess }) => {
       }}>
         {/* Logo / Nome do SaaS */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '56px',
-            height: '56px',
-            borderRadius: '16px',
-            background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-            fontSize: '24px',
-            fontWeight: '900',
-            color: '#ffffff',
-            boxShadow: '0 8px 24px rgba(99, 102, 241, 0.3)',
-            marginBottom: '16px'
-          }}>
-            PÁ
-          </div>
+          <img 
+            src="/logo.png" 
+            alt="PlanejaAÍ Logo" 
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '16px',
+              boxShadow: '0 8px 24px rgba(99, 102, 241, 0.25)',
+              marginBottom: '16px',
+              objectFit: 'cover'
+            }}
+          />
           <h2 style={{ fontSize: '26px', fontWeight: '800', margin: 0, letterSpacing: '-0.5px' }}>
             Planeja<span style={{
               background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',

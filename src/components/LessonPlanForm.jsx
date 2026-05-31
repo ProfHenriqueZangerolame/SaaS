@@ -802,7 +802,13 @@ export const LessonPlanForm = ({ user: _user, profile, onLogout }) => {
       <aside className="sidebar">
         <div>
           <div className="brand-section">
-            <div className="brand-logo">PÁ</div>
+            <div className="brand-logo" style={{ overflow: 'hidden', padding: 0 }}>
+              <img 
+                src="/logo.png" 
+                alt="Logo" 
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+              />
+            </div>
             <div className="brand-name">Planeja<span className="text-gradient">AÍ</span></div>
           </div>
 
